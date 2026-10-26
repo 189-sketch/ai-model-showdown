@@ -1,0 +1,9 @@
+# No project_id here on purpose: create your own EdgeSpark project with `edgespark init`
+# and keep the edgespark.toml it generates (see README).
+
+[server]
+path = "server"
+
+[web]
+path = "web"
+output_path = "web/dist"

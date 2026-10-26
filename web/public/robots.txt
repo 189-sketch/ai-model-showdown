@@ -1,0 +1,7 @@
+# Without this file the SPA fallback served index.html as robots.txt.
+# Link-preview crawlers (X / Twitter cards, Facebook / Open Graph) may fetch the page and its share image.
+User-agent: Twitterbot
+Allow: /
+
+User-agent: facebookexternalhit
+Allow: /
