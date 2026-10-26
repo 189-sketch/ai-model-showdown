@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="web/public/assets/ui/title-logo.webp" alt="最强AI大模型对决" width="520" />
+<img src="web/public/assets/ui/og.jpg" alt="ChatGPT、Claude、DeepSeek、Grok 四位角色大合照" width="100%" />
 
 # 最强AI大模型对决
 
