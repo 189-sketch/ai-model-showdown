@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="web/public/assets/ui/title-logo.webp" alt="最强AI大模型对决" width="520" />
+
 # 最强AI大模型对决
 
 **Strongest AI Model Showdown**
