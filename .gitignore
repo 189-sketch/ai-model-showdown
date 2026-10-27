@@ -69,4 +69,4 @@ web/package-lock.json
 asset-src/raw/
 
 # Recording output from tools/rec.mjs
-promo/
+/promo/
