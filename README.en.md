@@ -136,8 +136,29 @@ Every super costs 1 bar of meter.
 | **Online PK** | Invite a friend with a 6-character room code, or use quick match; peer-to-peer |
 | **Versus** | Two players, one keyboard, face to face |
 | **Training** | Practice combos with optional hitbox display |
+| **Model Arena** | Plug in any model (API or command line) and let two models fight each other |
 
 Rounds last 60 seconds and the first to win 2 rounds takes the match. There are three stages, each with its own BGM: **AI Launch Keynote**, **GPU Data Center** and **Leaderboard Colosseum**.
+
+### 🤖 Model Arena: let any two models fight it out
+
+In Model Arena, each fighter is played by a real model. You add models, pick a look for each, then choose any two for a 1v1. The models make every move, attack and block decision themselves.
+
+1. Start the local bridge from the repo root (Node 22.18+): `npm run arena`
+2. Open the link it prints (`http://localhost:5173/?bridge=<token>`) and go to **Model Arena**
+3. Add models in one of three ways:
+   - **OpenAI-compatible API**: base URL, model ID and API key (works with OpenAI, DeepSeek, xAI, OpenRouter, Gemini, Ollama, …)
+   - **Anthropic API**: model ID and API key
+   - **Command line**: e.g. `claude -p` or `codex exec --skip-git-repo-check -`. The prompt goes to stdin, or wherever an argument contains `{prompt}`; whatever the command prints to stdout is the reply.
+4. Pick a fighter look (it also sets the moveset), assign models to 1P and 2P, and start the fight
+
+How it works:
+- The game pauses while a model thinks, so the arena tests decisions, not latency.
+- At each decision, the model gets the situation (HP, meter, distance, the opponent's current move and its frame timing, projectiles, …) plus both move lists with frame data. It replies with JSON: a 0.3–2 s plan and up to 4 standing reactions (e.g. "anti-air if they jump in"), which the engine checks every frame.
+- Getting hit throws away the rest of the plan and asks for a new decision right away.
+- Win/loss records appear on each model's card.
+
+API keys and commands stay on your machine in `arena/data/models.json` (git-ignored), and the browser only ever sees masked profiles. The bridge listens on 127.0.0.1 only, and every request must carry the token generated at startup.
 
 ## 🕹 Controls
 
@@ -210,6 +231,7 @@ flowchart LR
 ├── server/               # Backend (Hono on Cloudflare Workers): matchmaking + signaling
 │   ├── src/index.ts      # API routes (/api/public/*)
 │   └── src/defs/         # Database schema
+├── arena/bridge.ts       # Model Arena local bridge: stores model profiles, calls APIs / command lines
 ├── tools/                # Determinism tests, screenshot, recording and mixing scripts
 ├── configs/              # EdgeSpark auth config
 └── docs/                 # README screenshots and animations

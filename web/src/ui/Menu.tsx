@@ -7,12 +7,13 @@ import renoiseMark from "@/assets/renoise-mark.svg";
 import { Key, LangToggle, Logo, Screen } from "./common";
 import { Roster } from "./Roster";
 
-export type MenuChoice = "cpu" | "local" | "online" | "training" | "help";
+export type MenuChoice = "cpu" | "local" | "online" | "training" | "arena" | "help";
 
 const ITEMS: { id: MenuChoice; label: string; en: string; sub: string; color: string }[] = [
   { id: "cpu", label: "单人闯关", en: "ARCADE", sub: "和电脑主播打擂台", color: "var(--red)" },
   { id: "online", label: "联机对战", en: "ONLINE PK", sub: "房间码邀请好友 · 快速匹配", color: "var(--gold)" },
   { id: "local", label: "本地双人", en: "VERSUS", sub: "同一个键盘面对面对打", color: "var(--blue)" },
+  { id: "arena", label: "模型竞技场", en: "MODEL ARENA", sub: "接入任意大模型 · 让模型自己打", color: "#9b5cff" },
   { id: "training", label: "训练模式", en: "TRAINING", sub: "练连招 · 看判定框", color: "var(--cyan)" },
   { id: "help", label: "操作说明", en: "HOW TO PLAY", sub: "按键与全角色出招表", color: "#2b2735" },
 ];

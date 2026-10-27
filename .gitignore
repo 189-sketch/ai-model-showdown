@@ -70,3 +70,6 @@ asset-src/raw/
 
 # Recording output from tools/rec.mjs
 /promo/
+
+# Model Arena bridge: model profiles (API keys), results, token
+arena/data/

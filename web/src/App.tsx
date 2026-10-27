@@ -6,10 +6,11 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { loadArt } from "@/game/assets";
 import { audio } from "@/game/audio";
-import { CHARS, STAGES } from "@/game/chars";
+import { CHARS, STAGES, charIndex } from "@/game/chars";
 import type { PeerLink } from "@/game/rtc";
 import type { Mode } from "@/game/runner";
 import { getLang, onLangChange, tx } from "@/lib/i18n";
+import { Arena, type ArenaStart } from "@/ui/Arena";
 import { loadName, saveName } from "@/ui/common";
 import { Game } from "@/ui/Game";
 import { Help } from "@/ui/Help";
@@ -18,7 +19,7 @@ import { Online } from "@/ui/Online";
 import { Select, type StartInfo } from "@/ui/Select";
 import { Title } from "@/ui/Title";
 
-type ScreenId = "title" | "menu" | "online" | "select" | "game" | "help";
+type ScreenId = "title" | "menu" | "online" | "select" | "game" | "help" | "arena";
 
 const hasInvite = () => new URLSearchParams(location.search).has("room");
 
@@ -31,6 +32,7 @@ function App() {
   const [peerGone, setPeerGone] = useState(false);
   const [info, setInfo] = useState<StartInfo | null>(null);
   const [matchKey, setMatchKey] = useState(0);
+  const [arena, setArena] = useState<ArenaStart | null>(null);
   // switching 中文 / EN re-mounts the current screen so every label is drawn again
   const [lang, setLangState] = useState(getLang);
   useEffect(() => onLangChange(() => setLangState(getLang())), []);
@@ -63,6 +65,7 @@ function App() {
   const pick = (m: MenuChoice) => {
     if (m === "help") return setScreen("help");
     if (m === "online") return setScreen("online");
+    if (m === "arena") return setScreen("arena");
     setMode(m);
     setInfo(null);
     setScreen("select");
@@ -78,7 +81,7 @@ function App() {
     mode === "online" ? (isGuest ? [opponent, name] : [name, opponent]) : mode === "local" ? ["1P", "2P"] : [name, mode === "cpu" ? "CPU" : tx("木桩")];
   // the in-game HUD shows fighter names offline, player names online
   const hudNames: [string, string] =
-    mode === "online" ? playerNames : info ? [CHARS[info.chars[0]].name, CHARS[info.chars[1]].name] : ["", ""];
+    mode === "arena" && arena ? [arena.models[0].name, arena.models[1].name] : mode === "online" ? playerNames : info ? [CHARS[info.chars[0]].name, CHARS[info.chars[1]].name] : ["", ""];
 
   const start = useCallback((s: StartInfo) => {
     setInfo(s);
@@ -88,8 +91,23 @@ function App() {
 
   const toSelect = useCallback(() => {
     void audio.bgm("title");
-    setScreen("select");
-  }, []);
+    setScreen(mode === "arena" ? "arena" : "select");
+  }, [mode]);
+
+  const startArena = useCallback(
+    (a: ArenaStart) => {
+      setArena(a);
+      setMode("arena");
+      start({
+        chars: [Math.max(0, charIndex(a.models[0].body)), Math.max(0, charIndex(a.models[1].body))],
+        stage: a.stage,
+        seed: Math.floor(Math.random() * 2 ** 31),
+        cpuLevel: 2,
+        delay: 0,
+      });
+    },
+    [start]
+  );
 
   switch (screen) {
     case "title":
@@ -98,6 +116,8 @@ function App() {
       return <Menu key={lang} name={name} onName={onName} onPick={pick} />;
     case "help":
       return <Help key={lang} onBack={() => setScreen("menu")} />;
+    case "arena":
+      return <Arena key={lang} initial={arena ?? undefined} onStart={startArena} onBack={() => setScreen("menu")} />;
     case "online":
       return (
         <Online
@@ -133,6 +153,7 @@ function App() {
           info={info}
           names={hudNames}
           link={link ?? undefined}
+          arena={mode === "arena" && arena ? arena.models : undefined}
           matchKey={matchKey}
           peerGone={peerGone}
           onRematch={start}

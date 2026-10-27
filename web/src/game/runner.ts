@@ -10,10 +10,11 @@ import { readPlayer } from "./input";
 import { createRenderState, render, type RenderState } from "./render";
 import { RollbackSession } from "./rollback";
 import { createState, step } from "./sim";
+import type { Pilot } from "./pilot/pilot";
 import type { PeerLink } from "./rtc";
 import type { GameEvent, GameState, MatchConfig } from "./types";
 
-export type Mode = "cpu" | "local" | "training" | "online";
+export type Mode = "cpu" | "local" | "training" | "online" | "arena";
 export type DummyMode = "stand" | "crouch" | "block" | "jump";
 
 export interface RunnerOpts {
@@ -23,6 +24,7 @@ export interface RunnerOpts {
   names: [string, string];
   cpuLevel?: 1 | 2 | 3;
   link?: PeerLink;
+  pilots?: [Pilot, Pilot]; // arena: both sides are played by models
   localSide?: 0 | 1;
   inputDelay?: number;
   onMatchEnd?: (winner: number) => void;
@@ -106,8 +108,21 @@ export class GameRunner {
     return this.session?.stats ?? null;
   }
 
+  /** The world is frozen while a model is thinking. */
+  get thinking() {
+    return !!this.o.pilots?.some((p) => p.pending);
+  }
+
   private tick() {
     let events: GameEvent[] | null;
+    const pilots = this.o.pilots;
+    if (pilots) {
+      for (const p of pilots) if (p.wants(this.state)) void p.decide(this.state);
+      if (this.thinking) {
+        this.acc = 0;
+        return;
+      }
+    }
     const solo = this.o.mode !== "local";
     if (this.session) {
       if (this.o.link) this.session.rtt = this.o.link.rtt;
@@ -117,6 +132,9 @@ export class GameRunner {
         this.ended = true;
         this.o.onDisconnect?.();
       }
+    } else if (pilots) {
+      step(this.state, pilots[0].input(this.state), pilots[1].input(this.state));
+      events = this.state.events;
     } else {
       const in0 = readPlayer("p1", solo);
       let in1 = 0;

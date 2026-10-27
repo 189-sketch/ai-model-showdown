@@ -1,4 +1,7 @@
 {
   "name": "strongest-ai-model-showdown",
-  "private": true
+  "private": true,
+  "scripts": {
+    "arena": "node arena/bridge.ts"
+  }
 }
