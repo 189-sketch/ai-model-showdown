@@ -29,7 +29,7 @@ const LEVELS: { v: 1 | 2 | 3; label: string }[] = [
   { v: 3, label: "困难" },
 ];
 
-const MODE_LABEL: Record<Mode, string> = { cpu: "单人闯关", local: "本地双人", training: "训练模式", online: "联机对战" };
+const MODE_LABEL: Record<Mode, string> = { cpu: "单人闯关", local: "本地双人", training: "训练模式", online: "联机对战", arena: "模型竞技场" };
 
 function FighterPanel({
   idx, side, ready, tag, canCycle, onCycle, readyButton,

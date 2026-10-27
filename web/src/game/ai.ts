@@ -7,7 +7,7 @@ import { IN_D, IN_HK, IN_HP, IN_L, IN_LK, IN_LP, IN_R, IN_U } from "./constants"
 import { CHARS, findMove, type SpecialDef } from "./chars";
 import type { GameState } from "./types";
 
-interface Intent {
+export interface Intent {
   dir: number; // relative numpad direction
   btn: number;
 }
@@ -30,7 +30,7 @@ const ANTI_AIR = { 1: 0.12, 2: 0.4, 3: 0.75 };
 const COMBO = { 1: 0.1, 2: 0.45, 3: 0.85 };
 const DODGE = { 1: 0.02, 2: 0.06, 3: 0.12 };
 
-function toBits(it: Intent, facing: number) {
+export function toBits(it: Intent, facing: number) {
   let b = it.btn;
   const fwd = facing > 0 ? IN_R : IN_L;
   const back = facing > 0 ? IN_L : IN_R;
@@ -41,7 +41,7 @@ function toBits(it: Intent, facing: number) {
   return b;
 }
 
-function motion(dirs: number[], btn: number): Intent[] {
+export function motion(dirs: number[], btn: number): Intent[] {
   const out: Intent[] = [];
   for (const d of dirs) out.push({ dir: d, btn: 0 }, { dir: d, btn: 0 });
   out.push({ dir: dirs[dirs.length - 1], btn });
@@ -49,7 +49,7 @@ function motion(dirs: number[], btn: number): Intent[] {
   return out;
 }
 
-const MOTION_DIRS: Record<SpecialDef["motion"], number[]> = {
+export const MOTION_DIRS: Record<SpecialDef["motion"], number[]> = {
   "236": [2, 3, 6],
   "214": [2, 1, 4],
 };

@@ -3,9 +3,11 @@ import { audio } from "@/game/audio";
 import { CHARS, type CharDef } from "@/game/chars";
 import { tx } from "@/lib/i18n";
 import { startInput, stopInput } from "@/game/input";
+import { bridge, type ArenaModel } from "@/game/pilot/bridge";
+import { Pilot } from "@/game/pilot/pilot";
 import { GameRunner, type DummyMode, type Mode } from "@/game/runner";
 import type { CtrlMsg, PeerLink } from "@/game/rtc";
-import { ArcadeButton, isTouch } from "./common";
+import { ArcadeButton, SIDE_COLOR, isTouch } from "./common";
 import type { StartInfo } from "./Select";
 import { TouchPad } from "./TouchPad";
 
@@ -14,6 +16,7 @@ interface Props {
   info: StartInfo;
   names: [string, string];
   link?: PeerLink;
+  arena?: [ArenaModel, ArenaModel]; // mode "arena": the models playing each side
   matchKey: number;
   peerGone?: boolean;
   onRematch: (info: StartInfo) => void;
@@ -28,7 +31,7 @@ const DUMMY: { v: DummyMode; label: string }[] = [
   { v: "jump", label: "连续跳" },
 ];
 
-export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, onReselect, onExit }: Props) {
+export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRematch, onReselect, onExit }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const runner = useRef<GameRunner | null>(null);
   const [ended, setEnded] = useState<number | null>(null);
@@ -39,7 +42,8 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
   const [peerWantsRematch, setPeerWantsRematch] = useState(false);
   const [boxes, setBoxes] = useState(mode === "training");
   const [dummy, setDummy] = useState<DummyMode>("stand");
-  const [touch] = useState(isTouch);
+  const [touch] = useState(() => isTouch() && mode !== "arena");
+  const [pilots, setPilots] = useState<[Pilot, Pilot] | null>(null);
   const isHost = link?.role !== "guest";
   const localSide: 0 | 1 = mode === "online" && !isHost ? 1 : 0;
 
@@ -50,6 +54,8 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
     setVictory(null);
     setWantRematch(false);
     setPeerWantsRematch(false);
+    const ps = mode === "arena" && arena ? ([new Pilot(arena[0], 0), new Pilot(arena[1], 1)] as [Pilot, Pilot]) : undefined;
+    setPilots(ps ?? null);
     const r = new GameRunner({
       canvas: canvas.current,
       mode,
@@ -57,11 +63,25 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
       names,
       cpuLevel: info.cpuLevel,
       link,
+      pilots: ps,
       localSide,
       inputDelay: info.delay,
       onMatchEnd: (w) => {
         if (w === 0 || w === 1) setVictory(CHARS[info.chars[w]]);
         setEnded(w);
+        if (ps) {
+          void bridge
+            .result({
+              models: [ps[0].model.id, ps[1].model.id],
+              names: [ps[0].model.name, ps[1].model.name],
+              bodies: [CHARS[info.chars[0]].id, CHARS[info.chars[1]].id],
+              winner: w,
+              stage: info.stage,
+              seed: info.seed,
+              stats: [ps[0].stats, ps[1].stats],
+            })
+            .catch(() => {});
+        }
       },
       onDisconnect: () => setDisconnected(true),
     });
@@ -132,6 +152,8 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
 
   const gone = disconnected || !!peerGone;
   const won = ended !== null && (mode === "online" ? ended === localSide : ended === 0);
+  const title =
+    ended === 2 ? "DRAW" : mode === "arena" ? "WINNER" : mode === "local" ? `${ended === 0 ? "1P" : "2P"} WIN` : won ? "YOU WIN" : "YOU LOSE";
 
   return (
     <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-black">
@@ -142,6 +164,8 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
       />
 
       {touch && ended === null && !paused && <TouchPad />}
+
+      {pilots && ended === null && <PilotHud pilots={pilots} runner={runner} />}
 
       {mode !== "online" && ended === null && (
         <button
@@ -210,15 +234,15 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
 
       {ended !== null && !victory && !gone && (
         <Overlay
-          title={ended === 2 ? "DRAW" : mode === "local" ? `${ended === 0 ? "1P" : "2P"} WIN` : won ? "YOU WIN" : "YOU LOSE"}
-          gold={won || mode === "local"}
+          title={title}
+          gold={won || mode === "local" || mode === "arena"}
           sub={ended === 0 || ended === 1 ? tx("{0} 获胜", names[ended]) : tx("平局")}
         >
           <ArcadeButton tone="gold" disabled={wantRematch} onClick={rematch}>
             {mode === "online" ? (wantRematch ? tx("等待对手…") : peerWantsRematch ? tx("对手想再来一局！") : tx("再来一局")) : tx("再来一局")}
           </ArcadeButton>
           <ArcadeButton tone="blue" onClick={reselect}>
-            {tx("重新选人")}
+            {mode === "arena" ? tx("返回竞技场") : tx("重新选人")}
           </ArcadeButton>
           <ArcadeButton tone="gray" onClick={onExit}>
             {mode === "online" ? tx("离开房间") : tx("返回菜单")}
@@ -235,6 +259,44 @@ export function Game({ mode, info, names, link, matchKey, peerGone, onRematch, o
         </Overlay>
       )}
     </div>
+  );
+}
+
+/** Arena: what each model is doing — thinking (the world is paused), its plan, its taunt. */
+function PilotHud({ pilots, runner }: { pilots: [Pilot, Pilot]; runner: React.RefObject<GameRunner | null> }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 150);
+    return () => clearInterval(t);
+  }, []);
+  const thinking = pilots.filter((p) => p.pending);
+  return (
+    <>
+      {thinking.length > 0 && !runner.current?.paused && (
+        <div className="font-ui pointer-events-none absolute left-1/2 top-[22%] z-30 flex -translate-x-1/2 -skew-x-12 items-center gap-2 bg-black/65 px-3 py-1 text-xs font-bold text-white ring-1 ring-white/20">
+          <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--gold)]" />
+          {tx("{0} 思考中 {1}s · 时间暂停", thinking.map((p) => p.model.name).join(" / "), ((performance.now() - Math.min(...thinking.map((p) => p.thinkingSince))) / 1000).toFixed(1))}
+        </div>
+      )}
+      {pilots.map((p) => {
+        const last = p.log[p.log.length - 1];
+        const st = p.stats;
+        return (
+          <div
+            key={p.side}
+            className={`font-ui pointer-events-none absolute bottom-10 z-30 flex w-[min(42vw,320px)] flex-col gap-1 bg-black/60 px-2.5 py-1.5 text-[11px] text-white ring-1 ring-white/15 backdrop-blur-sm ${p.side ? "right-2 items-end text-right" : "left-2"}`}
+          >
+            <div className="flex items-center gap-1.5 font-black" style={{ color: SIDE_COLOR[p.side] }}>
+              {p.pending && <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--gold)]" />}
+              {p.model.name}
+              <span className="font-normal text-white/50">{tx("决策 {0} · 平均 {1}s · 失误 {2}", st.decisions, (st.avgMs / 1000).toFixed(1), st.errors)}</span>
+            </div>
+            {last?.say && <div className="font-bold text-[var(--gold)]">「{last.say}」</div>}
+            {last && (last.error ? <div className="truncate text-[var(--red)]">✗ {last.error}</div> : <div className="truncate text-white/75">{last.plan}</div>)}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
