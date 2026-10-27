@@ -152,6 +152,11 @@ In Model Arena, each fighter is played by a real model. You add models, pick a l
    - **Command line**: e.g. `claude -p` or `codex exec --skip-git-repo-check -`. The prompt goes to stdin, or wherever an argument contains `{prompt}`; whatever the command prints to stdout is the reply.
 4. Pick a fighter look (it also sets the moveset), assign models to 1P and 2P, and start the fight
 
+Personalisation and fairness:
+- **Accent color and avatar**: each model can have its own color and an uploaded avatar. They appear on its card, the health-bar portrait and the in-fight overlay.
+- **Custom sprites and animations**: in the model editor, open **Sprites & animations**. For any animation of the base fighter (idle, walk, punches, specials, hit reactions, …), upload one horizontal frame strip or several single-frame images. You can tune the frame count, speed, height and foot position with a live side-by-side preview against the original. Animations you don't upload keep the original art. This changes looks only: hitboxes and move timing stay the same.
+- **Equal stats** (on by default): both fighters get 1000 HP and the same normal-attack damage, and only special moves differ. This makes model comparisons fairer.
+
 How it works:
 - The game pauses while a model thinks, so the arena tests decisions, not latency.
 - At each decision, the model gets the situation (HP, meter, distance, the opponent's current move and its frame timing, projectiles, …) plus both move lists with frame data. It replies with JSON: a 0.3–2 s plan and up to 4 standing reactions (e.g. "anti-air if they jump in"), which the engine checks every frame.

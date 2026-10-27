@@ -205,6 +205,7 @@ export interface MatchConfig {
   stage: number;
   seed: number;
   training?: boolean;
+  equal?: boolean; // Model Arena "equal stats": same max HP and normal-attack damage for every fighter
 }
 
 export interface GameState {
@@ -232,5 +233,6 @@ export interface GameState {
   events: GameEvent[];
   stage: number;
   training: boolean;
+  equal: boolean;
   seed: number;
 }

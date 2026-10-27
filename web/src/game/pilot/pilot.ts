@@ -90,9 +90,9 @@ export class Pilot {
     const me = this.side;
     const f = s.fighters[me];
     const o = s.fighters[1 - me];
-    const key = `${f.char}/${o.char}`;
+    const key = `${f.char}/${o.char}/${s.equal}`;
     if (this.systemFor !== key) {
-      this.system = systemPrompt(CHARS[f.char], CHARS[o.char]);
+      this.system = systemPrompt(CHARS[f.char], CHARS[o.char], s.equal);
       this.systemFor = key;
     }
     const recap: Recap | null = !this.fresh

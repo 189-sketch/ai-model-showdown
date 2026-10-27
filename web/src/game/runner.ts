@@ -11,6 +11,7 @@ import { createRenderState, render, type RenderState } from "./render";
 import { RollbackSession } from "./rollback";
 import { createState, step } from "./sim";
 import type { Pilot } from "./pilot/pilot";
+import type { FighterSkin } from "./pilot/skin";
 import type { PeerLink } from "./rtc";
 import type { GameEvent, GameState, MatchConfig } from "./types";
 
@@ -42,6 +43,7 @@ export class GameRunner {
   private session: RollbackSession | null = null;
   private ended = false;
   private silentChecks = 0;
+  skins: [FighterSkin | null, FighterSkin | null] | undefined; // Model Arena looks, set once they have loaded
   paused = false;
   showBoxes = false;
   dummy: DummyMode = "stand";
@@ -175,6 +177,7 @@ export class GameRunner {
   private draw() {
     render(this.ctx, this.state, this.rs, {
       names: this.o.names,
+      skins: this.skins,
       showBoxes: this.showBoxes,
       localSide: this.localSide(),
       ping: this.o.mode === "online" ? this.o.link?.rtt ?? null : null,

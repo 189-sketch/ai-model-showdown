@@ -15,6 +15,7 @@ export interface SpriteFrame {
   h: number;
   ax: number; // anchor (feet centre) inside the frame, atlas pixels
   ay: number;
+  s?: number; // atlas pixels per game unit for this frame (custom skins); defaults to the set's scale
 }
 
 export interface SpriteAnim {
@@ -28,8 +29,9 @@ export interface SpriteSet {
   pages: HTMLImageElement[];
   scale: number;
   anims: Record<string, SpriteAnim>;
+  custom?: number; // pages from this index on are a model's uploaded skin: never recoloured
   // alternate costume colours for the 2P side of a mirror match (built lazily)
-  alt?: HTMLCanvasElement[] | null;
+  alt?: CanvasImageSource[] | null;
 }
 
 export interface FxSheet {
@@ -114,10 +116,11 @@ function recolor(img: HTMLImageElement): HTMLCanvasElement | null {
 }
 
 /** Alternate-colour pages for mirror matches, computed on first use. */
-export function altPages(set: SpriteSet): HTMLCanvasElement[] | null {
+export function altPages(set: SpriteSet): CanvasImageSource[] | null {
   if (set.alt === undefined) {
-    const pages = set.pages.map(recolor);
-    set.alt = pages.every((p): p is HTMLCanvasElement => !!p) ? pages : null;
+    const n = set.custom ?? set.pages.length;
+    const pages = set.pages.map((p, i) => (i < n ? recolor(p) : p));
+    set.alt = pages.every((p): p is HTMLCanvasElement | HTMLImageElement => !!p) ? pages : null;
   }
   return set.alt;
 }
