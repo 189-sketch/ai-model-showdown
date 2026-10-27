@@ -36,13 +36,13 @@ No install needed: play solo arcade, local versus or online matches, with touch 
 
 ## 🎃 Limited-time offer from the makers
 
-<a href="https://renoise.ai/?utm_source=github&utm_medium=readme&utm_campaign=halloween">
+<a href="https://renoise.ai/?utm_source=tomatoyan&utm_medium=github&utm_campaign=halloween">
   <img src="docs/promo/renoise-halloween-en.webp" alt="Renoise Halloween Unlimited Fun: 7 days unlimited, up to 30% off" width="100%" />
 </a>
 
-Every character portrait, animation frame, stage, cutscene, voice line and music track in this game was made with **[Renoise](https://renoise.ai/?utm_source=github&utm_medium=readme&utm_campaign=halloween)**.
+Every character portrait, animation frame, stage, cutscene, voice line and music track in this game was made with **[Renoise](https://renoise.ai/?utm_source=tomatoyan&utm_medium=github&utm_campaign=halloween)**.
 
-Renoise is running **Halloween Unlimited Fun**: **7 days of unlimited generation and up to 30% off**, with models including Seedance 2.5, Wan 3.0 and Kling 4.0. Want to build an AI fighting game of your own? Now's the time 👉 **[Try Renoise](https://renoise.ai/?utm_source=github&utm_medium=readme&utm_campaign=halloween)**
+Renoise is running **Halloween Unlimited Fun**: **7 days of unlimited generation and up to 30% off**, with models including Seedance 2.5, Wan 3.0 and Kling 4.0. Want to build an AI fighting game of your own? Now's the time 👉 **[Try Renoise](https://renoise.ai/?utm_source=tomatoyan&utm_medium=github&utm_campaign=halloween)**
 
 ---
 
