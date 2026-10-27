@@ -277,7 +277,7 @@ By default only public STUN servers are used, so two players who are both behind
 
 ## 🎨 About the assets
 
-All character portraits, animation frames, stages, cutscenes, voices and music were generated with AI using [Renoise](https://renoise.ai).
+All character portraits, animation frames, stages, cutscenes, voices and music were generated with AI using [Renoise](https://renoise.ai/?utm_source=tomatoyan&utm_medium=github).
 
 ## ⚠️ Disclaimer
 

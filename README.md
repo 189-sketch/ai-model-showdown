@@ -275,7 +275,7 @@ edgespark deploy
 
 ## 🎨 素材说明
 
-角色立绘、动作帧、舞台、过场视频、配音和音乐全部由 AI 生成，使用的工具是 [Renoise](https://renoise.ai)。
+角色立绘、动作帧、舞台、过场视频、配音和音乐全部由 AI 生成，使用的工具是 [Renoise](https://renoise.ai/?utm_source=tomatoyan&utm_medium=github)。
 
 ## ⚠️ 免责声明
 
