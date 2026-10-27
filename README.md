@@ -9,6 +9,8 @@
 ChatGPT、Claude、DeepSeek、Grok 化身格斗家，在直播间里一决高下的网页格斗游戏。<br/>
 打开浏览器就能玩，支持单人闯关、本地双人、联机对战，手机也能用触屏操作。
 
+**简体中文** · [English](README.en.md)
+
 <p>
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" />
@@ -29,6 +31,18 @@ ChatGPT、Claude、DeepSeek、Grok 化身格斗家，在直播间里一决高下
 <img src="docs/demo.webp" alt="实机演示" width="720" />
 
 </div>
+
+---
+
+## 🎃 制作方限时活动
+
+<a href="https://renoise.ai/?utm_source=github&utm_medium=readme&utm_campaign=halloween">
+  <img src="docs/promo/renoise-halloween-zh.webp" alt="Renoise 万圣节无限狂欢：7 天不限量，最高 30% 折扣" width="100%" />
+</a>
+
+这款游戏里的角色立绘、动作帧、舞台、过场动画、配音和音乐，全部是用 **[Renoise](https://renoise.ai/?utm_source=github&utm_medium=readme&utm_campaign=halloween)** 做出来的。
+
+Renoise 正在举办 **万圣节无限狂欢** 活动：**7 天不限量生成，最高 30% 折扣**，Seedance 2.5、Wan 3.0、Kling 4.0 等模型都能用。想做一款自己的 AI 格斗游戏？现在正是好时机 👉 **[立即前往 Renoise](https://renoise.ai/?utm_source=github&utm_medium=readme&utm_campaign=halloween)**
 
 ---
 
