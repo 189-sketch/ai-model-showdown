@@ -153,7 +153,7 @@ function App() {
           info={info}
           names={hudNames}
           link={link ?? undefined}
-          arena={mode === "arena" && arena ? arena.models : undefined}
+          arena={mode === "arena" && arena ? arena : undefined}
           matchKey={matchKey}
           peerGone={peerGone}
           onRematch={start}

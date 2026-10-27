@@ -1,18 +1,35 @@
 /**
  * Model Arena: connect to the local bridge, manage model profiles (API or
- * command line + fighter appearance), pick any two and let them fight.
+ * command line, fighter look, accent colour, avatar, custom sprites), pick
+ * any two and let them fight.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { audio } from "@/game/audio";
 import { CHARS, STAGES, charIndex } from "@/game/chars";
 import { bridge, DEFAULT_BRIDGE, type ArenaModel, type CallResult, type ModelInput, type ModelKind } from "@/game/pilot/bridge";
+import { forgetAvatar, useAvatar } from "@/hooks/useAvatar";
 import { tx } from "@/lib/i18n";
+import { fileToAvatar } from "@/lib/images";
 import { ArcadeButton, Face, SIDE_COLOR, Screen, TopBar } from "./common";
+import { SkinEditor } from "./SkinEditor";
 
 export interface ArenaStart {
   models: [ArenaModel, ArenaModel];
   stage: number;
+  equal: boolean; // same max HP and normal-attack damage for both fighters
+}
+
+/** A model's uploaded avatar, or its fighter's face, ringed in its accent colour. */
+function ModelAvatar({ m, className = "" }: { m: ArenaModel; className?: string }) {
+  const url = useAvatar(m);
+  const c = CHARS[Math.max(0, charIndex(m.body))];
+  const ring = { boxShadow: `0 0 0 2px ${m.color ?? "rgba(255,255,255,0.2)"}` };
+  return url ? (
+    <img src={url} alt="" className={`rounded-full object-cover ${className}`} style={ring} />
+  ) : (
+    <Face c={c} className={`rounded-full ${className}`} />
+  );
 }
 
 const KINDS: { v: ModelKind; label: string }[] = [
@@ -41,6 +58,7 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
   const [models, setModels] = useState<ArenaModel[]>([]);
   const [slots, setSlots] = useState<[string | null, string | null]>([initial?.models[0].id ?? null, initial?.models[1].id ?? null]);
   const [stage, setStage] = useState(initial?.stage ?? 2);
+  const [equal, setEqual] = useState(initial?.equal ?? true);
   const [editing, setEditing] = useState<ArenaModel | "new" | null>(null);
   const [tests, setTests] = useState<Record<string, CallResult | "running">>({});
 
@@ -145,8 +163,10 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
                     </span>
                     {m ? (
                       <>
-                        <Face c={CHARS[Math.max(0, charIndex(m.body))]} className="h-16 w-16 rounded-full ring-2 ring-white/20" />
-                        <span className="font-ui max-w-full truncate text-sm font-black">{m.name}</span>
+                        <ModelAvatar m={m} className="h-16 w-16" />
+                        <span className="font-ui max-w-full truncate text-sm font-black" style={{ color: m.color }}>
+                          {m.name}
+                        </span>
                       </>
                     ) : (
                       <span className="font-ui grid h-[88px] place-items-center text-xs text-white/40">{tx("未选择")}</span>
@@ -165,10 +185,17 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
                 ))}
               </select>
             </label>
+            <label className="font-ui flex cursor-pointer items-start gap-2 text-sm font-bold">
+              <input type="checkbox" className="mt-1 accent-[var(--gold)]" checked={equal} onChange={(e) => setEqual(e.target.checked)} />
+              <span className="flex flex-col">
+                {tx("统一属性")}
+                <span className="text-xs font-normal leading-relaxed text-white/55">{tx("双方血量和普通技伤害相同，只有必杀技不同，更公平")}</span>
+              </span>
+            </label>
             <p className="font-ui text-xs leading-relaxed text-white/55">
               {tx("模型思考时游戏会暂停，所以比的是决策，不是网速。每个决策覆盖约 0.3–2 秒的行动；被打中会立刻重新决策。")}
             </p>
-            <ArcadeButton tone="red" disabled={!picked[0] || !picked[1]} onClick={() => picked[0] && picked[1] && onStart({ models: [picked[0], picked[1]], stage })}>
+            <ArcadeButton tone="red" disabled={!picked[0] || !picked[1]} onClick={() => picked[0] && picked[1] && onStart({ models: [picked[0], picked[1]], stage, equal })}>
               {tx("开打！")}
             </ArcadeButton>
           </section>
@@ -179,8 +206,13 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
         <ModelEditor
           model={editing === "new" ? null : editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
+          onSaved={(m) => {
+            // a new model stays open so its look can be set up right away
+            setEditing(editing === "new" && m ? m : null);
+            void refresh();
+          }}
+          onChanged={(m) => {
+            setEditing(m);
             void refresh();
           }}
         />
@@ -239,7 +271,6 @@ function ModelCard({
   onEdit: () => void;
   onTest: () => void;
 }) {
-  const c = CHARS[Math.max(0, charIndex(m.body))];
   const how = m.kind === "cli" ? m.command : `${m.model} · ${m.baseUrl ?? "api.anthropic.com"}`;
   const rec = m.record ?? { w: 0, l: 0, d: 0 };
   return (
@@ -248,9 +279,12 @@ function ModelCard({
       style={{ ["--tw-ring-color" as string]: slot >= 0 ? SIDE_COLOR[slot] : "rgba(255,255,255,0.1)" }}
     >
       <div className="flex items-center gap-3">
-        <Face c={c} className="h-12 w-12 shrink-0 rounded-full ring-2" />
+        <ModelAvatar m={m} className="h-12 w-12 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-base font-black">{m.name}</span>
+          <span className="truncate text-base font-black" style={{ color: m.color }}>
+            {m.name}
+            {!!m.skinAnims?.length && <span className="ml-1.5 align-middle text-[10px] font-bold text-white/50">{tx("自定义动画 {0}", m.skinAnims.length)}</span>}
+          </span>
           <span className="truncate text-xs text-white/50" title={how}>
             {m.kind === "cli" ? "$ " : ""}
             {how}
@@ -291,10 +325,21 @@ function ModelCard({
   );
 }
 
-function ModelEditor({ model, onClose, onSaved }: { model: ArenaModel | null; onClose: () => void; onSaved: () => void }) {
+function ModelEditor({
+  model,
+  onClose,
+  onSaved,
+  onChanged,
+}: {
+  model: ArenaModel | null;
+  onClose: () => void;
+  onSaved: (m?: ArenaModel) => void;
+  onChanged: (m: ArenaModel) => void; // the avatar or sprites changed; the editor stays open
+}) {
   const [f, setF] = useState<ModelInput>(() => ({
     name: model?.name ?? "",
     body: model?.body ?? CHARS[0].id,
+    color: model?.color,
     kind: model?.kind ?? "openai",
     baseUrl: model ? model.baseUrl ?? "" : PRESETS[0].baseUrl,
     model: model?.model ?? "",
@@ -307,15 +352,32 @@ function ModelEditor({ model, onClose, onSaved }: { model: ArenaModel | null; on
   }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [skinOpen, setSkinOpen] = useState(false);
+  const avatarInput = useRef<HTMLInputElement>(null);
+  const avatarUrl = useAvatar(model);
   const set = (patch: Partial<ModelInput>) => setF((x) => ({ ...x, ...patch }));
+  const bodyChar = CHARS[Math.max(0, charIndex(f.body))];
+
+  /** Avatar and sprites change the stored model right away. */
+  const change = async (job: () => Promise<unknown>) => {
+    if (!model) return;
+    setError("");
+    try {
+      await job();
+      forgetAvatar(model.id);
+      const fresh = (await bridge.models()).find((x) => x.id === model.id);
+      if (fresh) onChanged(fresh);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
   const num = (v: string) => (v.trim() === "" ? undefined : Number(v));
 
   const save = async () => {
     setBusy(true);
     setError("");
     try {
-      await bridge.save(f, model?.id);
-      onSaved();
+      onSaved(await bridge.save(f, model?.id));
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -354,6 +416,60 @@ function ModelEditor({ model, onClose, onSaved }: { model: ArenaModel | null; on
             ))}
           </div>
         </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-bold text-white/50">{tx("强调色")}</span>
+            <span className="flex items-center gap-2">
+              <input type="color" className="h-8 w-12 cursor-pointer bg-transparent" value={f.color ?? bodyChar.color} onChange={(e) => set({ color: e.target.value })} />
+              {f.color && (
+                <button className="text-xs text-white/50 hover:text-white" onClick={() => set({ color: undefined })}>
+                  {tx("重置")}
+                </button>
+              )}
+            </span>
+          </label>
+          {model ? (
+            <>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-bold text-white/50">{tx("头像")}</span>
+                <span className="flex items-center gap-2">
+                  {avatarUrl ? <img src={avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" /> : <Face c={bodyChar} className="h-8 w-8 rounded-full" />}
+                  <button className="bg-white/10 px-2 py-1 text-xs font-bold hover:bg-white/20" onClick={() => avatarInput.current?.click()}>
+                    {tx("上传")}
+                  </button>
+                  {model.avatar && (
+                    <button className="text-xs text-white/50 hover:text-white" onClick={() => change(() => bridge.deleteAvatar(model.id))}>
+                      {tx("移除")}
+                    </button>
+                  )}
+                </span>
+                <input
+                  ref={avatarInput}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) void change(async () => bridge.putAvatar(model.id, await fileToAvatar(file)));
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-bold text-white/50">{tx("精灵与动画")}</span>
+                <button className="bg-white/10 px-2 py-1 text-xs font-bold hover:bg-white/20" onClick={() => setSkinOpen(true)}>
+                  {model.skinAnims?.length ? tx("编辑（已自定义 {0} 个）", model.skinAnims.length) : tx("自定义…")}
+                </button>
+              </div>
+            </>
+          ) : (
+            <span className="pb-1 text-xs text-white/45">{tx("保存后可以上传头像和自定义精灵动画")}</span>
+          )}
+        </div>
+        {model && model.body !== f.body && !!model.skinAnims?.length && (
+          <div className="text-xs text-[var(--gold)]">{tx("换了角色外观：已上传的动画会套在新角色上，同名动画才会生效")}</div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-bold text-white/50">{tx("接入方式")}</span>
@@ -464,6 +580,13 @@ function ModelEditor({ model, onClose, onSaved }: { model: ArenaModel | null; on
           )}
         </div>
       </div>
+      {skinOpen && model && (
+        <SkinEditor
+          model={{ ...model, body: f.body }}
+          onClose={() => setSkinOpen(false)}
+          onChanged={() => void change(async () => {})}
+        />
+      )}
     </div>
   );
 }

@@ -7,13 +7,15 @@
 
 import { BAN_COOLDOWN, CHARS, CINE_BAN, CINE_ULTRA, STAGES, findMove } from "./chars";
 import { GROUND_Y, H, METER_STOCK, ROUNDS_TO_WIN, STAGE_W, W } from "./constants";
-import { BAN_STAMP_AT, CINE_LEN, DODGE, MAID, activeHitbox, bodyOf, hurtboxes, projectileHitbox } from "./sim";
+import { BAN_STAMP_AT, CINE_LEN, DODGE, MAID, activeHitbox, bodyOf, hurtboxes, maxHp, projectileHitbox } from "./sim";
 import { altPages, art, type SpriteAnim, type SpriteFrame, type SpriteSet } from "./assets";
 import type { Fighter, Fx, GameState, MoveDef, Projectile } from "./types";
+import type { FighterSkin } from "./pilot/skin";
 import { getLang, tx } from "@/lib/i18n";
 
 export interface RenderOpts {
   names: [string, string];
+  skins?: [FighterSkin | null, FighterSkin | null]; // Model Arena: per-side sprites, avatar, accent colour
   showBoxes?: boolean;
   localSide?: 0 | 1 | -1; // which side is "you" (for the result text)
   ping?: number | null;
@@ -121,8 +123,8 @@ function animFor(set: SpriteSet, names: string[]): SpriteAnim | null {
 }
 
 /** The sprite set a fighter is drawn from right now (梁圣 form, the Roadster, …). */
-function spriteSetFor(f: Fighter): SpriteSet | null {
-  const own = art.sprites[CHARS[f.char].id] ?? null;
+function spriteSetFor(f: Fighter, skin: FighterSkin | null): SpriteSet | null {
+  const own = skin?.set ?? art.sprites[CHARS[f.char].id] ?? null;
   const mv = f.move && (f.state === "attack" || f.state === "throwing") ? findMove(f.char, f.move) : null;
   if (mv?.sprite) return art.sprites[mv.sprite] ?? own;
   if (f.muscle > 0) return art.sprites.muscle ?? own;
@@ -201,7 +203,7 @@ function pickFrame(set: SpriteSet, f: Fighter, t: number): SpriteFrame | null {
 // ───────────────────────── fighters ─────────────────────────
 
 function blit(ctx: CanvasRenderingContext2D, set: SpriteSet, pages: CanvasImageSource[], frame: SpriteFrame, x: number, y: number, facing: number) {
-  const k = 1 / set.scale;
+  const k = 1 / (frame.s ?? set.scale);
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(facing, 1);
@@ -209,7 +211,7 @@ function blit(ctx: CanvasRenderingContext2D, set: SpriteSet, pages: CanvasImageS
   ctx.restore();
 }
 
-function drawFighter(ctx: CanvasRenderingContext2D, s: GameState, i: 0 | 1, ox: number, oy: number, t: number) {
+function drawFighter(ctx: CanvasRenderingContext2D, s: GameState, i: 0 | 1, ox: number, oy: number, t: number, skin: FighterSkin | null) {
   const f = s.fighters[i];
   const c = CHARS[f.char];
   const body = bodyOf(f);
@@ -225,7 +227,7 @@ function drawFighter(ctx: CanvasRenderingContext2D, s: GameState, i: 0 | 1, ox: 
 
   if (f.state === "getup" && Math.floor(t / 3) % 2 === 0) ctx.globalAlpha = 0.65;
   if (f.state === "dodge" && f.sf <= DODGE.invuln) ctx.globalAlpha = 0.75;
-  const set = spriteSetFor(f);
+  const set = spriteSetFor(f, skin);
   const frame = set ? spriteFrame(set, f, t + i * 13) : null;
   if (set && frame) {
     const mirror = i === 1 && s.fighters[0].char === f.char;
@@ -620,7 +622,7 @@ const FACE_CROP: Record<string, [number, number, number]> = {
   grok: [0.5, 0.3, 0.5],
 };
 
-function drawAvatar(ctx: CanvasRenderingContext2D, id: string, cx: number, cy: number, r: number, ring: string[], flip: boolean) {
+function drawAvatar(ctx: CanvasRenderingContext2D, id: string, cx: number, cy: number, r: number, ring: string[], flip: boolean, custom?: HTMLImageElement | null) {
   const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
   g.addColorStop(0, ring[0]);
   g.addColorStop(1, ring[1]);
@@ -635,7 +637,11 @@ function drawAvatar(ctx: CanvasRenderingContext2D, id: string, cx: number, cy: n
   ctx.fillStyle = "#222";
   ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
   const p = art.portraits[id];
-  if (p) {
+  if (custom) {
+    // an uploaded avatar: centre-crop to a square
+    const side = Math.min(custom.width, custom.height);
+    ctx.drawImage(custom, (custom.width - side) / 2, (custom.height - side) / 2, side, side, cx - r, cy - r, r * 2, r * 2);
+  } else if (p) {
     const [fx, fy, fw] = FACE_CROP[id] ?? [0.5, 0.3, 0.55];
     const sw = p.width * fw;
     if (flip) {
@@ -674,12 +680,13 @@ function drawHud(ctx: CanvasRenderingContext2D, s: GameState, rs: RenderState, o
     const f = s.fighters[i];
     const c = CHARS[f.char];
     const col = i === 0 ? RED : BLUE;
-    const ratio = Math.max(0, f.hp / c.hp);
+    const ratio = Math.max(0, f.hp / maxHp(s, f));
     rs.lagHp[i] = ratio < rs.lagHp[i] ? Math.max(ratio, rs.lagHp[i] - 0.005) : ratio;
     const x0 = i === 0 ? 38 : W - 38 - BW;
     const y0 = 8;
 
-    drawAvatar(ctx, c.id, i === 0 ? 20 : W - 20, 18, 13, col, i === 1);
+    const skin = o.skins?.[i];
+    drawAvatar(ctx, c.id, i === 0 ? 20 : W - 20, 18, 13, skin?.color ? [skin.color, skin.color] : col, i === 1, skin?.avatar);
 
     // bar
     ctx.fillStyle = "rgba(10,6,20,0.75)";
@@ -704,7 +711,7 @@ function drawHud(ctx: CanvasRenderingContext2D, s: GameState, rs: RenderState, o
 
     // name (+ 「（已被收购）」 after losing a round to Grok) and round wins
     const name = (o.names[i] || c.name) + (f.acquired ? tx("（已被收购）") : "");
-    text(ctx, name, i === 0 ? x0 + 2 : x0 + BW - 2, y0 + 19, 10, f.acquired ? "#ffd166" : "#fff", i === 0 ? "left" : "right", CN_FONT, 2.4);
+    text(ctx, name, i === 0 ? x0 + 2 : x0 + BW - 2, y0 + 19, 10, f.acquired ? "#ffd166" : skin?.color ?? "#fff", i === 0 ? "left" : "right", CN_FONT, 2.4);
     for (let r = 0; r < ROUNDS_TO_WIN; r++) {
       const hx = i === 0 ? x0 + BW - 6 - r * 11 : x0 + 6 + r * 11;
       text(ctx, r < f.wins ? "♥" : "♡", hx, y0 + 19, 10, r < f.wins ? col[0] : "rgba(255,255,255,0.5)", "center", CN_FONT, 2);
@@ -862,7 +869,7 @@ function updateLive(s: GameState, rs: RenderState) {
       if (victim.combo === 4) pushGift(rs, i, "🌹", tx("观众送给{0} 玫瑰 x{1}", names[i], victim.combo));
     }
     rs.lastCombo[i] = victim.combo;
-    const hp = s.fighters[i].hp / CHARS[s.fighters[i].char].hp;
+    const hp = s.fighters[i].hp / maxHp(s, s.fighters[i]);
     if (hp < rs.lastHp[i] - 0.06) rs.viewers += 60;
     rs.lastHp[i] = hp;
     const f = s.fighters[i];
@@ -1239,7 +1246,7 @@ export function render(ctx: CanvasRenderingContext2D, s: GameState, rs: RenderSt
 
   // the attacker draws on top
   const order: (0 | 1)[] = s.fighters[1].state === "attack" && s.fighters[0].state !== "attack" ? [0, 1] : [1, 0];
-  for (const i of order) drawFighter(ctx, s, i, ox, oy, t);
+  for (const i of order) drawFighter(ctx, s, i, ox, oy, t, o.skins?.[i] ?? null);
   drawProjectiles(ctx, s, ox, oy, t);
   drawFx(ctx, s, ox, oy);
   for (const i of order) drawOverhead(ctx, s, i, ox, oy, t);

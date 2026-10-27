@@ -10,6 +10,7 @@ export interface ArenaModel {
   id: string;
   name: string;
   body: string; // CharDef id used as the fighter's appearance
+  color?: string; // accent colour, #rrggbb
   kind: ModelKind;
   baseUrl?: string;
   model?: string;
@@ -20,10 +21,26 @@ export interface ArenaModel {
   temperature?: number;
   maxTokens?: number;
   record?: { w: number; l: number; d: number };
+  avatar?: boolean; // has an uploaded avatar
+  skinAnims?: string[]; // animations with uploaded sprite strips
 }
 
 /** What the editor sends; apiKey is only ever written, never read back. */
-export type ModelInput = Omit<ArenaModel, "id" | "hasKey" | "record"> & { apiKey?: string };
+export type ModelInput = Omit<ArenaModel, "id" | "hasKey" | "record" | "avatar" | "skinAnims"> & { apiKey?: string };
+
+/** One animation override: a horizontal strip of `frames` equal-width frames, facing right. */
+export interface AnimSkin {
+  file: string;
+  frames: number;
+  fps?: number;
+  height: number; // game units the frame height spans (fighters stand ~95 tall)
+  anchorX: number; // 0..1 across a frame: where the feet are
+}
+
+export interface SkinData {
+  avatar?: string;
+  anims: Record<string, AnimSkin>;
+}
 
 export interface CallResult {
   ok: boolean;
@@ -102,6 +119,28 @@ export const bridge = {
   },
   test(id: string) {
     return this.req<CallResult>(`/models/${id}/test`, { method: "POST" });
+  },
+  skin(id: string) {
+    return this.req<SkinData>(`/models/${id}/skin`);
+  },
+  /** A skin image as an object URL (the token can't ride on a plain <img src>). */
+  async file(id: string, file: string): Promise<string> {
+    const res = await fetch(`${this.url}/models/${id}/skin/file/${file}`, { headers: { "x-arena-token": this.token } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  },
+  putAvatar(id: string, data: string) {
+    return this.req<SkinData>(`/models/${id}/avatar`, { method: "PUT", body: JSON.stringify({ data }) });
+  },
+  deleteAvatar(id: string) {
+    return this.req<SkinData>(`/models/${id}/avatar`, { method: "DELETE" });
+  },
+  /** Upload (with `data`) or re-tune an animation override. */
+  putAnim(id: string, anim: string, meta: Partial<Omit<AnimSkin, "file" | "fps">> & { fps?: number | null; data?: string }) {
+    return this.req<SkinData>(`/models/${id}/skin/anims/${anim}`, { method: "PUT", body: JSON.stringify(meta) });
+  },
+  deleteAnim(id: string, anim: string) {
+    return this.req<SkinData>(`/models/${id}/skin/anims/${anim}`, { method: "DELETE" });
   },
   decide(model: string, system: string, prompt: string) {
     return this.req<CallResult>("/decide", { method: "POST", body: JSON.stringify({ model, system, prompt }) });

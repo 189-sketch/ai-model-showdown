@@ -6,6 +6,7 @@
 
 import { CHARS, findMove, type CharDef } from "../chars";
 import { METER_STOCK, STAGE_W, WALL_PAD } from "../constants";
+import { EQUAL_HP, maxHp } from "../sim";
 import type { Fighter, GameState, MoveDef } from "../types";
 import { CONDITIONS } from "./plan";
 
@@ -32,16 +33,16 @@ function notes(mv: MoveDef) {
   return n.join(", ");
 }
 
-function row(label: string, mv: MoveDef) {
-  const dmg = mv.projectile ? mv.projectile.damage : mv.damage;
+function row(label: string, mv: MoveDef, dmgScale = 1) {
+  const dmg = mv.projectile ? mv.projectile.damage : Math.round(mv.damage * dmgScale);
   return `| ${label} | ${mv.startup}/${mv.active}/${mv.recovery} | ${dmg} | ${mv.projectile?.level ?? mv.level} | ${reach(mv)} | ${notes(mv)} |`;
 }
 
 /** Move list, keeping the original (Chinese) names: they say what the moves do. */
-function moveTable(c: CharDef, full: boolean) {
-  const out = [`### ${c.name} — ${c.hp} HP, walk ${c.walkF} px/f, run ${c.runSpeed} px/f, air time ≈${Math.round((2 * c.jumpVy) / c.gravity)} f`];
+function moveTable(c: CharDef, full: boolean, equal: boolean) {
+  const out = [`### ${c.name} — ${equal ? EQUAL_HP : c.hp} HP, walk ${c.walkF} px/f, run ${c.runSpeed} px/f, air time ≈${Math.round((2 * c.jumpVy) / c.gravity)} f`];
   out.push("| move | startup/active/recovery (frames) | damage | level | reach | notes |", "|---|---|---|---|---|---|");
-  if (full) for (const id of NORMAL_IDS) out.push(row(`normal ${id}`, c.normals[id]));
+  if (full) for (const id of NORMAL_IDS) out.push(row(`normal ${id}`, c.normals[id], equal ? 1 / c.normalDmg : 1));
   c.specials.forEach((sp, i) => {
     out.push(row(`special slot ${i + 1} light`, sp.light));
     out.push(row(`special slot ${i + 1} heavy`, sp.heavy));
@@ -54,7 +55,7 @@ function moveTable(c: CharDef, full: boolean) {
   return out.join("\n");
 }
 
-export function systemPrompt(me: CharDef, opp: CharDef): string {
+export function systemPrompt(me: CharDef, opp: CharDef, equal: boolean): string {
   return `You are the pilot of a fighter in a 2D fighting game, playing a real best-of-3 match against another AI model. Win each round by bringing the opponent to 0 HP, or by having more HP when the 60 s timer runs out.
 
 ## How time works
@@ -70,13 +71,13 @@ export function systemPrompt(me: CharDef, opp: CharDef): string {
 - Meter: you gain it by attacking and taking hits (max 2 bars). The super costs 1 bar; without the meter (or while ChatGPT's Ultra is already running) the super input comes out as a standing heavy kick instead. A dodge out of blockstun costs 0.5 bar.
 - Dodge roll: briefly invulnerable, rolls through the opponent, punishable at the end.
 - Jumping attacks must be done while airborne: jump, wait a few frames, then use a j* normal. One air attack per jump.
-- Projectiles: you can only have one of each kind on screen.
+- Projectiles: you can only have one of each kind on screen.${equal ? "\n- Equal stats are on: both fighters have " + EQUAL_HP + " HP and the same normal-attack damage. Special moves still differ." : ""}
 
 ## Your fighter
-${moveTable(me, true)}
+${moveTable(me, true, equal)}
 
 ## Opponent's fighter (their normals are similar to yours)
-${moveTable(opp, false)}
+${moveTable(opp, false, equal)}
 
 ## Your reply
 Reply with ONE JSON object and nothing else:
@@ -132,11 +133,11 @@ function statuses(f: Fighter) {
   return s.length ? ` Status: ${s.join("; ")}.` : "";
 }
 
-function fighterLine(label: string, f: Fighter) {
+function fighterLine(s: GameState, label: string, f: Fighter) {
   const c = CHARS[f.char];
   const air = f.y > 0 ? `, ${Math.round(f.y)} px in the air` : "";
   const back = f.facing > 0 ? f.x - WALL_PAD : STAGE_W - WALL_PAD - f.x;
-  return `${label} (${c.name}): HP ${Math.max(0, Math.round(f.hp))}/${c.hp}, meter ${(f.meter / METER_STOCK).toFixed(2)} bars, ${STATE_TEXT[f.state] ?? f.state}${moveText(f)}${air}; ${Math.round(back)} px of room behind.${statuses(f)}`;
+  return `${label} (${c.name}): HP ${Math.max(0, Math.round(f.hp))}/${maxHp(s, f)}, meter ${(f.meter / METER_STOCK).toFixed(2)} bars, ${STATE_TEXT[f.state] ?? f.state}${moveText(f)}${air}; ${Math.round(back)} px of room behind.${statuses(f)}`;
 }
 
 export interface Recap {
@@ -153,8 +154,8 @@ export function observation(s: GameState, me: 0 | 1, recap: Recap | null): strin
   const toward = Math.sign(o.x - f.x) || f.facing;
   const lines = [
     `Round ${s.round} · ${(s.timer / 60).toFixed(1)} s left · round wins: you ${f.wins}, opponent ${o.wins}`,
-    fighterLine("YOU", f),
-    fighterLine("OPPONENT", o),
+    fighterLine(s, "YOU", f),
+    fighterLine(s, "OPPONENT", o),
     `Distance: ${Math.round(Math.abs(o.x - f.x))} px (opponent is ${toward > 0 ? "to your right" : "to your left"}).`,
   ];
   const shots = s.projectiles.map((p) => {

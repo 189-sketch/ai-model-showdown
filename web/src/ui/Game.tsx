@@ -3,11 +3,13 @@ import { audio } from "@/game/audio";
 import { CHARS, type CharDef } from "@/game/chars";
 import { tx } from "@/lib/i18n";
 import { startInput, stopInput } from "@/game/input";
-import { bridge, type ArenaModel } from "@/game/pilot/bridge";
+import { bridge } from "@/game/pilot/bridge";
 import { Pilot } from "@/game/pilot/pilot";
+import { loadFighterSkin, type FighterSkin } from "@/game/pilot/skin";
 import { GameRunner, type DummyMode, type Mode } from "@/game/runner";
 import type { CtrlMsg, PeerLink } from "@/game/rtc";
 import { ArcadeButton, SIDE_COLOR, isTouch } from "./common";
+import type { ArenaStart } from "./Arena";
 import type { StartInfo } from "./Select";
 import { TouchPad } from "./TouchPad";
 
@@ -16,7 +18,7 @@ interface Props {
   info: StartInfo;
   names: [string, string];
   link?: PeerLink;
-  arena?: [ArenaModel, ArenaModel]; // mode "arena": the models playing each side
+  arena?: ArenaStart; // mode "arena": the models playing each side
   matchKey: number;
   peerGone?: boolean;
   onRematch: (info: StartInfo) => void;
@@ -44,6 +46,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
   const [dummy, setDummy] = useState<DummyMode>("stand");
   const [touch] = useState(() => isTouch() && mode !== "arena");
   const [pilots, setPilots] = useState<[Pilot, Pilot] | null>(null);
+  const [skins, setSkins] = useState<[FighterSkin, FighterSkin] | null>(null);
   const isHost = link?.role !== "guest";
   const localSide: 0 | 1 = mode === "online" && !isHost ? 1 : 0;
 
@@ -54,12 +57,12 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
     setVictory(null);
     setWantRematch(false);
     setPeerWantsRematch(false);
-    const ps = mode === "arena" && arena ? ([new Pilot(arena[0], 0), new Pilot(arena[1], 1)] as [Pilot, Pilot]) : undefined;
+    const ps = mode === "arena" && arena ? ([new Pilot(arena.models[0], 0), new Pilot(arena.models[1], 1)] as [Pilot, Pilot]) : undefined;
     setPilots(ps ?? null);
     const r = new GameRunner({
       canvas: canvas.current,
       mode,
-      config: { chars: info.chars, stage: info.stage, seed: info.seed, training: mode === "training" },
+      config: { chars: info.chars, stage: info.stage, seed: info.seed, training: mode === "training", equal: mode === "arena" && !!arena?.equal },
       names,
       cpuLevel: info.cpuLevel,
       link,
@@ -76,6 +79,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
               names: [ps[0].model.name, ps[1].model.name],
               bodies: [CHARS[info.chars[0]].id, CHARS[info.chars[1]].id],
               winner: w,
+              equal: !!arena?.equal,
               stage: info.stage,
               seed: info.seed,
               stats: [ps[0].stats, ps[1].stats],
@@ -88,7 +92,17 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
     r.showBoxes = mode === "training";
     runner.current = r;
     r.start();
+    // model looks load while the round intro plays
+    let live = true;
+    if (ps) {
+      void Promise.all(ps.map((p) => loadFighterSkin(p.model))).then(([a, b]) => {
+        if (!live) return;
+        r.skins = [a, b];
+        setSkins([a, b]);
+      });
+    }
     return () => {
+      live = false;
       r.stop();
       runner.current = null;
       stopInput();
@@ -165,7 +179,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
 
       {touch && ended === null && !paused && <TouchPad />}
 
-      {pilots && ended === null && <PilotHud pilots={pilots} runner={runner} />}
+      {pilots && ended === null && <PilotHud pilots={pilots} skins={skins} runner={runner} />}
 
       {mode !== "online" && ended === null && (
         <button
@@ -263,7 +277,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
 }
 
 /** Arena: what each model is doing — thinking (the world is paused), its plan, its taunt. */
-function PilotHud({ pilots, runner }: { pilots: [Pilot, Pilot]; runner: React.RefObject<GameRunner | null> }) {
+function PilotHud({ pilots, skins, runner }: { pilots: [Pilot, Pilot]; skins: [FighterSkin, FighterSkin] | null; runner: React.RefObject<GameRunner | null> }) {
   const [, setTick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 150);
@@ -286,8 +300,9 @@ function PilotHud({ pilots, runner }: { pilots: [Pilot, Pilot]; runner: React.Re
             key={p.side}
             className={`font-ui pointer-events-none absolute bottom-10 z-30 flex w-[min(42vw,320px)] flex-col gap-1 bg-black/60 px-2.5 py-1.5 text-[11px] text-white ring-1 ring-white/15 backdrop-blur-sm ${p.side ? "right-2 items-end text-right" : "left-2"}`}
           >
-            <div className="flex items-center gap-1.5 font-black" style={{ color: SIDE_COLOR[p.side] }}>
+            <div className="flex items-center gap-1.5 font-black" style={{ color: skins?.[p.side].color ?? SIDE_COLOR[p.side] }}>
               {p.pending && <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--gold)]" />}
+              {skins?.[p.side].avatar && <img src={skins[p.side].avatar!.src} alt="" className="h-4 w-4 rounded-full object-cover" />}
               {p.model.name}
               <span className="font-normal text-white/50">{tx("决策 {0} · 平均 {1}s · 失误 {2}", st.decisions, (st.avgMs / 1000).toFixed(1), st.errors)}</span>
             </div>

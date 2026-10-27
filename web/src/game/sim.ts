@@ -37,14 +37,21 @@ export const DODGE = { len: 30, roll: 22, invuln: 12, fwd: 3.8, back: 3.0 };
 
 // ───────────────────────── setup ─────────────────────────
 
-export function createFighter(char: number, side: 0 | 1): Fighter {
+export const EQUAL_HP = 1000;
+
+/** A fighter's full health: its own, or the shared value in an equal-stats match. */
+export function maxHp(s: Pick<GameState, "equal">, f: Pick<Fighter, "char">) {
+  return s.equal ? EQUAL_HP : CHARS[f.char].hp;
+}
+
+export function createFighter(char: number, side: 0 | 1, hp = CHARS[char].hp): Fighter {
   return {
     char,
     x: STAGE_W / 2 + (side === 0 ? -70 : 70),
     y: 0, vx: 0, vy: 0,
     facing: side === 0 ? 1 : -1,
     state: "intro", sf: 0, move: null,
-    hp: CHARS[char].hp, meter: 0, stun: 0,
+    hp, meter: 0, stun: 0,
     crouching: false, blockCrouch: false,
     hitCount: 0, rehitTimer: 0, pushVx: 0,
     airAttackUsed: false, jumpVx: 0,
@@ -64,7 +71,10 @@ export function createState(cfg: MatchConfig): GameState {
     phaseFrame: 0,
     round: 1,
     timer: ROUND_SECONDS * 60,
-    fighters: [createFighter(cfg.chars[0], 0), createFighter(cfg.chars[1], 1)],
+    fighters: [
+      createFighter(cfg.chars[0], 0, maxHp({ equal: !!cfg.equal }, { char: cfg.chars[0] })),
+      createFighter(cfg.chars[1], 1, maxHp({ equal: !!cfg.equal }, { char: cfg.chars[1] })),
+    ],
     projectiles: [],
     fx: [],
     freeze: 0,
@@ -83,6 +93,7 @@ export function createState(cfg: MatchConfig): GameState {
     events: [],
     stage: cfg.stage,
     training: !!cfg.training,
+    equal: !!cfg.equal,
     seed: cfg.seed,
   };
 }
@@ -110,7 +121,7 @@ export function checksum(s: GameState): number {
 function resetRound(s: GameState) {
   s.fighters.forEach((f, i) => {
     const { wins, meter, acquired } = f;
-    Object.assign(f, createFighter(f.char, i as 0 | 1));
+    Object.assign(f, createFighter(f.char, i as 0 | 1, maxHp(s, f)));
     f.wins = wins;
     f.meter = meter;
     f.acquired = acquired;
@@ -1033,10 +1044,12 @@ interface HitData {
   fx?: HitFx | "explosion";
 }
 
-function moveHitData(mv: MoveDef, f: Fighter): HitData {
+function moveHitData(mv: MoveDef, f: Fighter, equal: boolean): HitData {
   const lastHit = f.hitCount + 1 >= (mv.hits ?? 1);
+  const c = CHARS[f.char];
+  const ownNormal = mv.kind === "normal" && c.normals[mv.id as NormalId] === mv;
   return {
-    damage: mv.damage,
+    damage: equal && ownNormal ? Math.round(mv.damage / c.normalDmg) : mv.damage,
     chip: mv.chip ?? 0,
     hitstun: mv.hitstun,
     blockstun: mv.blockstun,
@@ -1282,7 +1295,7 @@ function resolveHits(s: GameState) {
       continue;
     }
     pending.push({
-      ai, vi: bi, d: moveHitData(mv, A),
+      ai, vi: bi, d: moveHitData(mv, A, s.equal),
       x: A.facing > 0 ? Math.min(hb.x1, B.x) : Math.max(hb.x0, B.x),
       y: (Math.max(hb.y0, B.y) + Math.min(hb.y1, B.y + 70)) / 2, proj: null,
     });
@@ -1467,8 +1480,8 @@ function resolvePositions(s: GameState) {
 
 // ───────────────────────── round flow ─────────────────────────
 
-function hpRatio(f: Fighter) {
-  return f.hp / CHARS[f.char].hp;
+function hpRatio(s: GameState, f: Fighter) {
+  return f.hp / maxHp(s, f);
 }
 
 // each fighter's KO gag has its own sound (the screens themselves are drawn by the renderer)
@@ -1512,7 +1525,7 @@ function updatePhase(s: GameState) {
         s.phase = "ko";
         s.phaseFrame = 0;
         s.timeOver = true;
-        const ra = hpRatio(a), rb = hpRatio(b);
+        const ra = hpRatio(s, a), rb = hpRatio(s, b);
         s.roundWinner = ra === rb ? 2 : ra > rb ? 0 : 1;
         emit(s, "announce", "timeover");
       }
@@ -1526,7 +1539,7 @@ function updatePhase(s: GameState) {
           for (const f of winners) {
             setState(f, "win");
             f.move = null;
-            s.perfect = f.hp === CHARS[f.char].hp;
+            s.perfect = f.hp === maxHp(s, f);
           }
           if (w !== 2) {
             voice(s, w as 0 | 1, "win");
@@ -1628,7 +1641,7 @@ export function step(s: GameState, in0: number, in1: number) {
     for (const f of s.fighters) {
       f.meter = METER_MAX;
       if (f.combo === 0 && ["idle", "crouch", "walkF", "walkB"].includes(f.state)) {
-        f.hp = CHARS[f.char].hp;
+        f.hp = maxHp(s, f);
         f.gpl = 0;
       }
     }

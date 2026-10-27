@@ -22,6 +22,7 @@ export interface CharDef {
   quote: string; // select-screen line
   color: string;
   hp: number;
+  normalDmg: number; // the multiplier baked into this fighter's normals (undone in equal-stats matches)
   walkF: number;
   walkB: number;
   runSpeed: number;
@@ -359,6 +360,7 @@ export const CHARS: CharDef[] = [
     quote: "我会稳稳接住你。",
     color: "#7b8cff",
     hp: 1000,
+    normalDmg: 1,
     walkF: 2.6,
     walkB: 2.2,
     runSpeed: 5.8,
@@ -398,6 +400,7 @@ export const CHARS: CharDef[] = [
     quote: "你说得完全对！",
     color: "#ff9a4d",
     hp: 960,
+    normalDmg: 1.02,
     walkF: 2.4,
     walkB: 2.0,
     runSpeed: 5.3,
@@ -437,6 +440,7 @@ export const CHARS: CharDef[] = [
     quote: "已深度思考。",
     color: "#4d8bff",
     hp: 1080,
+    normalDmg: 1.15,
     walkF: 2.2,
     walkB: 1.9,
     runSpeed: 5.0,
@@ -476,6 +480,7 @@ export const CHARS: CharDef[] = [
     quote: "倒计时，三、二、一，点火！",
     color: "#e5e7eb",
     hp: 980,
+    normalDmg: 1.08,
     walkF: 3.0,
     walkB: 2.5,
     runSpeed: 6.4,
