@@ -164,6 +164,13 @@ How it works:
 - Getting hit throws away the rest of the plan and asks for a new decision right away.
 - Win/loss records appear on each model's card.
 
+Troubleshooting:
+- **Test a decision** on a model's card asks for one real decision and shows how long it took and whether the reply contained a usable plan. Try it before a match.
+- Reasoning models (DeepSeek's `deepseek-reasoner`, MiniMax M2, …) can think for a minute or two per decision. Each call may take up to 300 s by default. Replies are streamed, so a model that is still producing output (including its thinking) is never cut off, but 90 s with no output at all counts as a timeout. Raise **Timeout** in the model's settings if it needs longer, or pick a non-reasoning model (e.g. `deepseek-chat`) for quicker fights.
+- The bridge's terminal logs one line per call, with its duration or the reason it failed.
+- If a model fails 3 decisions in a row, the match pauses and shows the error, with options to keep trying or go back to the arena.
+- If you need a proxy to reach an API, start with `HTTPS_PROXY=http://your-proxy NODE_USE_ENV_PROXY=1 npm run arena`.
+
 API keys and commands stay on your machine in `arena/data/models.json` (git-ignored), and the browser only ever sees masked profiles. The bridge listens on 127.0.0.1 only, and every request must carry the token generated at startup.
 
 ## 🕹 Controls

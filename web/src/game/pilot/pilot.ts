@@ -34,6 +34,7 @@ export class Pilot {
   thinkingSince = 0;
   decisions = 0;
   errors = 0;
+  failStreak = 0; // failed decisions in a row (the arena stops to ask after a few)
   totalMs = 0;
   log: PilotLog[] = [];
   // plan playback
@@ -116,7 +117,8 @@ export class Pilot {
     try {
       const r = await bridge.decide(this.model.id, this.system, prompt);
       const plan = r.ok && r.text ? parsePlan(r.text) : null;
-      if (!plan) throw Object.assign(new Error(r.error ?? `unreadable reply: ${(r.text ?? "").slice(0, 120)}`), { ms: r.ms });
+      if (!plan) throw Object.assign(new Error(r.error ?? `the reply had no valid plan JSON: …${(r.text ?? "").trim().slice(-160)}`), { ms: r.ms });
+      this.failStreak = 0;
       this.steps = plan.steps;
       this.reactions = plan.reactions;
       this.armed = plan.reactions.map((r) => !conditionMet(r.if, s, me));
@@ -124,6 +126,7 @@ export class Pilot {
       entry = { at: s.frame, say: plan.say, plan: plan.steps.map(describe).join(" · "), ms: r.ms };
     } catch (e) {
       this.errors++;
+      this.failStreak++;
       this.steps = [...FALLBACK];
       this.reactions = [];
       const ms = (e as { ms?: number }).ms ?? Math.round(performance.now() - this.thinkingSince);

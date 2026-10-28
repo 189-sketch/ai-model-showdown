@@ -126,8 +126,9 @@ export const bridge = {
   remove(id: string) {
     return this.req<{ ok: boolean }>(`/models/${id}`, { method: "DELETE" });
   },
-  test(id: string) {
-    return this.req<CallResult>(`/models/${id}/test`, { method: "POST" });
+  /** With `sample`, the test is a real decision (see samplePrompt), so it also shows how long one takes. */
+  test(id: string, sample?: { system: string; prompt: string }) {
+    return this.req<CallResult>(`/models/${id}/test`, { method: "POST", body: JSON.stringify(sample ?? {}) });
   },
   skin(id: string) {
     return this.req<SkinData>(`/models/${id}/skin`);
