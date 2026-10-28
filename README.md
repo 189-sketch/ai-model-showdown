@@ -25,6 +25,7 @@ ChatGPT、Claude、DeepSeek、Grok 化身格斗家，在直播间里一决高下
   <a href="#-游戏模式">游戏模式</a> ·
   <a href="#-操作">操作</a> ·
   <a href="#-技术亮点">技术亮点</a> ·
+  <a href="#-本地运行不需要-edgespark-账号">本地运行</a> ·
   <a href="#-部署到你自己的-edgespark-项目">部署</a>
 </p>
 
@@ -239,6 +240,52 @@ flowchart LR
 ├── configs/              # EdgeSpark 认证配置
 └── docs/                 # README 用的截图和动图
 ```
+
+## 🛠 本地运行（不需要 EdgeSpark 账号）
+
+想先把「联机对战」在本机跑通？后端可以完全脱离平台，用一个普通 Node 进程跑起来 —— 不用注册 EdgeSpark、不用装 CLI、不用建项目。
+
+需要 Node.js 22.18 以上版本（用到内置的 `node:sqlite`）。
+
+**1. 装依赖、起后端**
+
+```bash
+cd server
+npm install
+npm run dev:local
+```
+
+它会启动一个本地 HTTP 服务，并把数据存到 `server/local/data/pk.db`（SQLite 文件，已在 `.gitignore` 里）：
+
+```
+  local API   →  http://127.0.0.1:8787
+  database    →  ...\server\local\data\pk.db
+  web dev     →  http://localhost:5173  (vite proxies /api here)
+```
+
+数据库表结构用的是仓库里同一份 Drizzle 迁移（`server/drizzle/`），启动时自动建表，重复启动不会重复建。
+
+**2. 起前端**
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+打开 http://localhost:5173 就能玩了。前端会把 `/api` 代理到 `http://localhost:8787`，和 `edgespark dev` 的行为一致。
+
+**本地后端提供什么**
+
+只有联机对战需要的那部分：`/api/public/*` —— 建房 / 房间码 / 加入 / 大厅人数 / ICE 服务器 / WebRTC 信令中转。
+单人闯关、本地双人、训练模式、模型竞技场本来就不需要后端。
+
+**它和线上部署的关系**
+
+路由代码只有一份，放在 `server/src/app.ts`；`server/src/index.ts` 是 Cloudflare Workers 入口，`server/local/` 是本地 Node 入口。
+两边共用同一份 schema 和迁移文件，所以本地跑通的行为和线上一致，改了 schema 只要重新 `edgespark db generate` 再重启本地后端就会自动应用。
+
+想部署到线上，还是看下面这一节。
 
 ## 🚀 部署到你自己的 EdgeSpark 项目
 

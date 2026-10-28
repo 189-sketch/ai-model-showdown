@@ -4,9 +4,11 @@
   "description": "EdgeSpark user code template for AI coding agents",
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:local": "tsx local/server.ts"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
     "hono": "^4.10.5",
     "drizzle-orm": "^0.45.1"
   },
@@ -14,6 +16,7 @@
     "@edgespark/devkit": ">=0.0.1 <1.0.0",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.30.6",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
 }

@@ -73,3 +73,6 @@ asset-src/raw/
 
 # Model Arena bridge: model profiles (API keys), results, token
 arena/data/
+
+# Local dev backend database
+server/local/data/

@@ -25,6 +25,7 @@ No install needed: play solo arcade, local versus or online matches, with touch 
   <a href="#-game-modes">Modes</a> ·
   <a href="#-controls">Controls</a> ·
   <a href="#-under-the-hood">Under the hood</a> ·
+  <a href="#-run-it-locally-no-edgespark-account-needed">Run locally</a> ·
   <a href="#-deploy-your-own-copy-on-edgespark">Deploy</a>
 </p>
 
@@ -241,6 +242,52 @@ flowchart LR
 ├── configs/              # EdgeSpark auth config
 └── docs/                 # README screenshots and animations
 ```
+
+## 🛠 Run it locally (no EdgeSpark account needed)
+
+Want to try online versus on your machine first? The backend runs as a plain Node process, completely off-platform — no EdgeSpark signup, no CLI, no project.
+
+Needs Node.js 22.18 or newer (it uses the built-in `node:sqlite`).
+
+**1. Install dependencies and start the backend**
+
+```bash
+cd server
+npm install
+npm run dev:local
+```
+
+It serves the API locally and keeps the data in `server/local/data/pk.db` (a SQLite file, already in `.gitignore`):
+
+```
+  local API   →  http://127.0.0.1:8787
+  database    →  ...\server\local\data\pk.db
+  web dev     →  http://localhost:5173  (vite proxies /api here)
+```
+
+The tables come from the same Drizzle migrations as production (`server/drizzle/`), applied automatically at startup. Restarting never re-applies them.
+
+**2. Start the frontend**
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Open http://localhost:5173 and play. The frontend proxies `/api` to `http://localhost:8787`, exactly like `edgespark dev` does.
+
+**What the local backend covers**
+
+Only what online versus needs: `/api/public/*` — create room / invite code / join / lobby count / ICE servers / WebRTC signaling relay.
+Arcade, local versus, training mode and the model arena never needed a backend in the first place.
+
+**How it relates to production**
+
+The routes live in one place, `server/src/app.ts`. `server/src/index.ts` is the Cloudflare Workers entry, `server/local/` is the local Node entry.
+Both share the same schema and migration files, so what you test locally is what you deploy — if you change the schema, run `edgespark db generate` and restart the local backend to pick it up.
+
+For deploying, see the section below.
 
 ## 🚀 Deploy your own copy on EdgeSpark
 
