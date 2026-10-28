@@ -119,8 +119,9 @@ export function conditionMet(id: string, s: GameState, me: 0 | 1) {
 
 // ───────────────────────── parsing ─────────────────────────
 
-/** First balanced {...} in the text that parses as JSON (fenced blocks first). */
-export function extractJson(text: string): unknown {
+/** First balanced {...} in the text that parses as JSON (fenced blocks first). Reasoning in <think> tags is skipped. */
+export function extractJson(raw: string): unknown {
+  const text = raw.replace(/<think>[\s\S]*?<\/think>/g, "");
   const fenced = [...text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)].map((m) => m[1]);
   for (const src of [...fenced, text]) {
     for (let start = src.indexOf("{"); start >= 0; start = src.indexOf("{", start + 1)) {

@@ -8,6 +8,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { audio } from "@/game/audio";
 import { CHARS, STAGES, charIndex } from "@/game/chars";
 import { bridge, DEFAULT_BRIDGE, servedByBridge, type ArenaModel, type CallResult, type ModelInput, type ModelKind } from "@/game/pilot/bridge";
+import { parsePlan, describe } from "@/game/pilot/plan";
+import { samplePrompt } from "@/game/pilot/prompt";
 import { forgetAvatar, useAvatar } from "@/hooks/useAvatar";
 import { tx } from "@/lib/i18n";
 import { fileToAvatar } from "@/lib/images";
@@ -41,6 +43,8 @@ const KINDS: { v: ModelKind; label: string }[] = [
 const PRESETS: { label: string; baseUrl: string }[] = [
   { label: "OpenAI", baseUrl: "https://api.openai.com/v1" },
   { label: "DeepSeek", baseUrl: "https://api.deepseek.com/v1" },
+  { label: "MiniMax", baseUrl: "https://api.minimax.io/v1" },
+  { label: "MiniMax 中国", baseUrl: "https://api.minimaxi.com/v1" },
   { label: "xAI", baseUrl: "https://api.x.ai/v1" },
   { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1" },
   { label: "Gemini", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },
@@ -96,7 +100,7 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
   const test = async (m: ArenaModel) => {
     setTests((t) => ({ ...t, [m.id]: "running" }));
     try {
-      const r = await bridge.test(m.id);
+      const r = await bridge.test(m.id, samplePrompt(Math.max(0, charIndex(m.body))));
       setTests((t) => ({ ...t, [m.id]: r }));
     } catch (e) {
       setTests((t) => ({ ...t, [m.id]: { ok: false, ms: 0, error: (e as Error).message } }));
@@ -313,17 +317,34 @@ function ModelCard({
           </button>
         ))}
         <button className="-skew-x-12 bg-white/10 px-2.5 py-1 hover:bg-white/20" onClick={onTest} disabled={test === "running"}>
-          {test === "running" ? tx("测试中…") : tx("测试")}
+          {test === "running" ? tx("测试中…") : tx("测试决策")}
         </button>
         <button className="-skew-x-12 bg-white/10 px-2.5 py-1 hover:bg-white/20" onClick={onEdit}>
           {tx("编辑")}
         </button>
       </div>
-      {test && test !== "running" && (
-        <div className={`break-all text-xs ${test.ok ? "text-[#3ddc84]" : "text-[var(--red)]"}`}>
-          {test.ok ? `✓ ${(test.ms / 1000).toFixed(1)}s · ${(test.text ?? "").trim().slice(0, 80)}` : `✗ ${test.error}`}
-        </div>
-      )}
+      {test === "running" && <div className="text-xs text-white/50">{tx("正在让它做一次真实决策，推理模型可能要一两分钟…")}</div>}
+      {test && test !== "running" && <TestResult r={test} />}
+    </div>
+  );
+}
+
+/** What a test decision came back with: a usable plan, a reply without one, or an error. */
+function TestResult({ r }: { r: CallResult }) {
+  const secs = `${(r.ms / 1000).toFixed(1)}s`;
+  if (!r.ok) return <div className="break-words text-xs text-[var(--red)]">✗ {secs} · {r.error}</div>;
+  const plan = parsePlan(r.text ?? "");
+  if (plan) {
+    return (
+      <div className="break-words text-xs text-[#3ddc84]">
+        ✓ {tx("{0} 给出了有效计划", secs)}: {plan.steps.map(describe).join(" · ") || tx("（只有反应）")}
+        {r.ms > 30000 && <span className="text-[var(--gold)]"> · {tx("偏慢：一局大约要 60–100 次决策")}</span>}
+      </div>
+    );
+  }
+  return (
+    <div className="break-words text-xs text-[var(--gold)]">
+      ⚠ {tx("{0} 有回复，但没有可用的 JSON 计划", secs)}: …{(r.text ?? "").trim().slice(-160)}
     </div>
   );
 }
@@ -552,7 +573,7 @@ function ModelEditor({
         <div className="grid grid-cols-3 gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-bold text-white/50">{tx("超时（秒）")}</span>
-            <input className={input} inputMode="numeric" value={f.timeoutSec ?? ""} placeholder={f.kind === "cli" ? "120" : "60"} onChange={(e) => set({ timeoutSec: num(e.target.value) })} />
+            <input className={input} inputMode="numeric" value={f.timeoutSec ?? ""} placeholder="300" onChange={(e) => set({ timeoutSec: num(e.target.value) })} />
           </label>
           {f.kind !== "cli" && (
             <>

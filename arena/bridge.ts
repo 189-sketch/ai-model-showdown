@@ -192,44 +192,143 @@ function clean(input: Partial<ModelProfile>, prev?: ModelProfile): ModelProfile 
 
 // ───────────────────────── calling models ─────────────────────────
 
+// Reasoning models (DeepSeek reasoner, MiniMax M2, …) can think for minutes on one decision. The game is
+// paused meanwhile, so be patient: a call may take up to `timeoutSec` in total, and an API stream may
+// go quiet for at most IDLE_SEC once it has started (a model still streaming reasoning tokens counts as alive).
+const DEFAULT_TIMEOUT_SEC = 300;
+const IDLE_SEC = Number(process.env.ARENA_IDLE_SEC ?? 90);
+
 async function callModel(m: ModelProfile, system: string, prompt: string): Promise<string> {
-  const timeout = (m.timeoutSec ?? (m.kind === "cli" ? 120 : 60)) * 1000;
+  const timeout = (m.timeoutSec ?? DEFAULT_TIMEOUT_SEC) * 1000;
   if (m.kind === "cli") return runCommand(m, `${system}\n\n${prompt}`, timeout);
-  const signal = AbortSignal.timeout(timeout);
   if (m.kind === "anthropic") {
-    const res = await fetch(`${m.baseUrl ?? "https://api.anthropic.com"}/v1/messages`, {
-      method: "POST",
-      signal,
+    return streamText(m, `${m.baseUrl ?? "https://api.anthropic.com"}/v1/messages`, timeout, {
       headers: { "content-type": "application/json", "x-api-key": m.apiKey ?? "", "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
+      body: {
         model: m.model,
         max_tokens: m.maxTokens ?? 1024,
         system,
         messages: [{ role: "user", content: prompt }],
+        stream: true,
         ...(m.temperature !== undefined && { temperature: m.temperature }),
-      }),
+      },
     });
-    const j = (await res.json()) as { content?: { type: string; text?: string }[]; error?: { message?: string } };
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${j.error?.message ?? JSON.stringify(j).slice(0, 300)}`);
-    return (j.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
   }
-  const res = await fetch(`${m.baseUrl}/chat/completions`, {
-    method: "POST",
-    signal,
+  return streamText(m, `${m.baseUrl}/chat/completions`, timeout, {
     headers: { "content-type": "application/json", ...(m.apiKey && { authorization: `Bearer ${m.apiKey}` }) },
-    body: JSON.stringify({
+    body: {
       model: m.model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: prompt },
       ],
+      stream: true,
       ...(m.maxTokens !== undefined && { max_tokens: m.maxTokens }),
       ...(m.temperature !== undefined && { temperature: m.temperature }),
-    }),
+    },
   });
-  const j = (await res.json()) as { choices?: { message?: { content?: string } }[]; error?: { message?: string } };
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${j.error?.message ?? JSON.stringify(j).slice(0, 300)}`);
+}
+
+type ApiReply = {
+  choices?: { message?: { content?: string }; delta?: { content?: string } }[];
+  content?: { type: string; text?: string }[];
+  type?: string;
+  delta?: { type?: string; text?: string };
+  error?: { message?: string } | string;
+};
+
+const errorText = (j: ApiReply) => (typeof j.error === "string" ? j.error : j.error?.message);
+
+/** The reply text of a non-streamed answer (some servers ignore `stream: true`). */
+function wholeText(m: ModelProfile, j: ApiReply) {
+  if (m.kind === "anthropic") return (j.content ?? []).filter((b) => b.type === "text").map((b) => b.text).join("");
   return j.choices?.[0]?.message?.content ?? "";
+}
+
+/** One server-sent event's share of the reply text (OpenAI chunks or Anthropic content deltas). */
+function deltaText(m: ModelProfile, j: ApiReply) {
+  if (errorText(j)) throw new Error(`the API reported an error: ${errorText(j)}`);
+  if (m.kind === "anthropic") return j.type === "content_block_delta" && j.delta?.type === "text_delta" ? j.delta.text ?? "" : "";
+  return j.choices?.[0]?.delta?.content ?? "";
+}
+
+/** Readable reasons for network failures, with the usual fix. */
+function networkError(e: unknown, url: string): Error {
+  const err = e as { message?: string; cause?: { code?: string; message?: string; errors?: { code?: string }[] } };
+  const code = err.cause?.code ?? err.cause?.errors?.[0]?.code ?? "";
+  const host = new URL(url).host;
+  const proxyHint = " If you need a proxy to reach it, start the bridge with HTTPS_PROXY=<proxy url> NODE_USE_ENV_PROXY=1.";
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return new Error(`cannot find ${host} (DNS: ${code}). Check the Base URL.${proxyHint}`);
+  if (/TIMEOUT|ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH/.test(code)) return new Error(`cannot connect to ${host} (${code}).${proxyHint}`);
+  if (/CERT|SSL|TLS/.test(code)) return new Error(`TLS problem talking to ${host} (${code})`);
+  return new Error(`request to ${host} failed: ${err.cause?.message ?? err.message ?? String(e)}`);
+}
+
+async function streamText(m: ModelProfile, url: string, timeout: number, init: { headers: Record<string, string>; body: object }): Promise<string> {
+  const ctrl = new AbortController();
+  let why = "";
+  const stop = (reason: string) => {
+    why = reason;
+    ctrl.abort();
+  };
+  const total = setTimeout(() => stop(`no complete reply within ${timeout / 1000} s. Reasoning models can need longer: raise the timeout in this model's settings`), timeout);
+  let idle: ReturnType<typeof setTimeout> | undefined;
+  const alive = () => {
+    clearTimeout(idle);
+    idle = setTimeout(() => stop(`the API stream went silent for ${IDLE_SEC} s`), IDLE_SEC * 1000);
+  };
+  try {
+    let res: Response;
+    try {
+      res = await fetch(url, { method: "POST", signal: ctrl.signal, headers: init.headers, body: JSON.stringify(init.body) });
+    } catch (e) {
+      throw ctrl.signal.aborted ? new Error(why) : networkError(e, url);
+    }
+    if (!res.ok) {
+      const raw = await res.text();
+      let msg = raw.slice(0, 300);
+      try {
+        msg = errorText(JSON.parse(raw) as ApiReply) ?? msg;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(`HTTP ${res.status} from ${new URL(url).host}: ${msg}`);
+    }
+    if (!(res.headers.get("content-type") ?? "").includes("event-stream")) {
+      const j = JSON.parse(await res.text()) as ApiReply;
+      if (errorText(j)) throw new Error(`the API reported an error: ${errorText(j)}`);
+      return wholeText(m, j);
+    }
+    alive();
+    let out = "";
+    let buf = "";
+    const dec = new TextDecoder();
+    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
+      alive();
+      buf += dec.decode(chunk, { stream: true });
+      for (let nl = buf.indexOf("\n"); nl >= 0; nl = buf.indexOf("\n")) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") continue;
+        let j: ApiReply;
+        try {
+          j = JSON.parse(data) as ApiReply;
+        } catch {
+          continue; // keep-alive comments and the like
+        }
+        out += deltaText(m, j);
+      }
+    }
+    return out;
+  } catch (e) {
+    if (ctrl.signal.aborted && why) throw new Error(why);
+    throw e;
+  } finally {
+    clearTimeout(total);
+    clearTimeout(idle);
+  }
 }
 
 /** Split a command line into argv, honouring '…', "…" and backslash escapes. No shell is involved. */
@@ -291,7 +390,7 @@ function runCommand(m: ModelProfile, prompt: string, timeout: number): Promise<s
       } catch {
         /* already gone */
       }
-      reject(new Error(`timed out after ${timeout / 1000}s`));
+      reject(new Error(`no reply within ${timeout / 1000} s. Raise the timeout in this model's settings if it needs longer`));
     }, timeout);
     child.on("error", (e) => {
       clearTimeout(timer);
@@ -333,6 +432,12 @@ async function body<T>(req: IncomingMessage, limit = 2_000_000): Promise<T> {
 function send(res: ServerResponse, status: number, data: unknown) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(data));
+}
+
+/** One line per model call on the bridge's console, so slow or failing models are easy to spot. */
+function log(m: ModelProfile, what: string, ms: number, outcome: string) {
+  const time = new Date().toTimeString().slice(0, 8);
+  console.log(`  ${time}  ${m.name} · ${what} · ${(ms / 1000).toFixed(1)} s · ${outcome}`);
 }
 
 const LOCAL_HOSTS = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
@@ -470,12 +575,16 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     }
   }
   if (one && one[2] && method === "POST") {
+    // the page sends a real first-decision prompt, so the test also shows how long a decision takes
+    const b = await body<{ system?: string; prompt?: string }>(req);
     const m = find(one[1]);
     const t0 = Date.now();
     try {
-      const text = await callModel(m, "You are a connection test.", 'Reply with exactly: {"ok":true}');
-      return send(res, 200, { ok: true, ms: Date.now() - t0, text: text.slice(0, 400) });
+      const text = await callModel(m, b.system ?? "You are a connection test.", b.prompt ?? 'Reply with exactly: {"ok":true}');
+      log(m, "test", Date.now() - t0, `${text.length} chars`);
+      return send(res, 200, { ok: true, ms: Date.now() - t0, text: text.slice(-2000) });
     } catch (e) {
+      log(m, "test", Date.now() - t0, `FAILED: ${(e as Error).message}`);
       return send(res, 200, { ok: false, ms: Date.now() - t0, error: (e as Error).message });
     }
   }
@@ -486,8 +595,10 @@ async function route(req: IncomingMessage, res: ServerResponse) {
     const t0 = Date.now();
     try {
       const text = await callModel(m, String(b.system ?? ""), String(b.prompt ?? ""));
+      log(m, "decide", Date.now() - t0, `${text.length} chars`);
       return send(res, 200, { ok: true, ms: Date.now() - t0, text });
     } catch (e) {
+      log(m, "decide", Date.now() - t0, `FAILED: ${(e as Error).message}`);
       return send(res, 200, { ok: false, ms: Date.now() - t0, error: (e as Error).message });
     }
   }
