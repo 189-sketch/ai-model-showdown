@@ -145,8 +145,8 @@ Rounds last 60 seconds and the first to win 2 rounds takes the match. There are 
 
 In Model Arena, each fighter is played by a real model. You add models, pick a look for each, then choose any two for a 1v1. The models make every move, attack and block decision themselves.
 
-1. Start the local bridge from the repo root (Node 22.18+): `npm run arena`
-2. Open the link it prints (`http://localhost:5173/?bridge=<token>`) and go to **Model Arena**
+1. Install dependencies (`cd web && npm install`), then run `npm run arena` from the repo root (Node 22.18+). It builds the game and starts the local bridge, which serves the game and the bridge on one port.
+2. Open the link it prints (`http://localhost:7790/?bridge=<token>`). It opens straight into **Model Arena**. If the project lives on a remote machine, forward the port first: `ssh -L 7790:localhost:7790 <host>`. While developing with the Vite dev server, use `npm run arena:bridge` plus `cd web && npm run dev` instead, and open the 5173 link it prints.
 3. Add models in one of three ways:
    - **OpenAI-compatible API**: base URL, model ID and API key (works with OpenAI, DeepSeek, xAI, OpenRouter, Gemini, Ollama, …)
    - **Anthropic API**: model ID and API key

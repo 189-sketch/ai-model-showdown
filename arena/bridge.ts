@@ -13,15 +13,19 @@
  * Each model can also have a skin in arena/data/skins/<id>/: an avatar and
  * sprite-strip overrides for any of its fighter's animations.
  *
- *   npm run arena                 (from the repo root; Node 22.18+)
+ * It also serves the built game (web/dist) on the same port, so a single
+ * link (and a single forwarded port on a remote machine) is all it takes.
+ *
+ *   npm run arena                 (from the repo root; Node 22.18+): build the game, then start
+ *   npm run arena:bridge          bridge only, for use with the Vite dev server
  *   ARENA_PORT=7790 ARENA_HOST=127.0.0.1
  */
 
 import { spawn } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { dirname, join } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PORT = Number(process.env.ARENA_PORT ?? 7790);
@@ -33,6 +37,8 @@ const TOKEN_FILE = join(DATA, "token");
 const WORK_DIR = join(DATA, "work"); // default cwd for command-line models
 const SKINS_DIR = join(DATA, "skins");
 const MAX_IMAGE = 12_000_000; // bytes of base64 per uploaded image
+const WEB_DIST = resolve(dirname(fileURLToPath(import.meta.url)), "..", "web", "dist");
+const API_PATHS = /^\/(health|models|decide|results)(\/|$)/;
 
 type Kind = "openai" | "anthropic" | "cli";
 
@@ -331,6 +337,52 @@ function send(res: ServerResponse, status: number, data: unknown) {
 
 const LOCAL_HOSTS = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
+// ───────────────────────── the game itself ─────────────────────────
+
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json",
+  ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+  ".gif": "image/gif", ".ico": "image/x-icon", ".mp4": "video/mp4", ".webm": "video/webm", ".mp3": "audio/mpeg",
+  ".ogg": "audio/ogg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".woff": "font/woff", ".woff2": "font/woff2", ".txt": "text/plain",
+};
+
+/** Serves web/dist: real files as-is (with byte ranges for media), anything else falls back to the SPA's index.html. */
+function serveStatic(req: IncomingMessage, res: ServerResponse, path: string) {
+  const index = join(WEB_DIST, "index.html");
+  if (!existsSync(index)) {
+    res.writeHead(503, { "content-type": "text/plain; charset=utf-8" });
+    return void res.end("The game isn't built yet. Start the arena with `npm run arena` (it builds web/dist first).\n");
+  }
+  let file = resolve(WEB_DIST, "." + decodeURIComponent(path));
+  if (file !== WEB_DIST && !file.startsWith(WEB_DIST + sep)) throw new HttpError(403, "forbidden");
+  if (!existsSync(file) || statSync(file).isDirectory()) {
+    if (extname(path)) throw new HttpError(404, "not found"); // a missing asset, not an app route
+    file = index;
+  }
+  if (file === index) {
+    // tells the page its bridge is this same origin (the token still has to come from the printed link)
+    const html = readFileSync(index, "utf8").replace("</head>", "<script>window.__ARENA_BRIDGE__=true</script></head>");
+    res.writeHead(200, { "content-type": MIME[".html"], "cache-control": "no-store" });
+    return void res.end(req.method === "HEAD" ? undefined : html);
+  }
+  const size = statSync(file).size;
+  const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range ?? "");
+  if (range && (range[1] || range[2])) {
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(size - 1, Number(range[2])) : size - 1;
+    if (start > end || start >= size) {
+      res.writeHead(416, { "content-range": `bytes */${size}` });
+      return void res.end();
+    }
+    res.writeHead(206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${size}`, "content-length": end - start + 1 });
+    return void (req.method === "HEAD" ? res.end() : createReadStream(file, { start, end }).pipe(res));
+  }
+  res.writeHead(200, { "content-type": type, "accept-ranges": "bytes", "content-length": size });
+  if (req.method === "HEAD") return void res.end();
+  createReadStream(file).pipe(res);
+}
+
 async function route(req: IncomingMessage, res: ServerResponse) {
   const url = new URL(req.url ?? "/", "http://bridge");
   const path = url.pathname;
@@ -466,7 +518,9 @@ const server = createServer(async (req, res) => {
   try {
     // DNS rebinding guard: only answer to localhost names
     if (!LOCAL_HOSTS.test(req.headers.host ?? "")) throw new HttpError(403, "bad host");
-    if (req.url !== "/health" && req.headers["x-arena-token"] !== TOKEN) throw new HttpError(401, "bad token");
+    const path = new URL(req.url ?? "/", "http://bridge").pathname;
+    if (!API_PATHS.test(path) && (req.method === "GET" || req.method === "HEAD")) return serveStatic(req, res, path);
+    if (path !== "/health" && req.headers["x-arena-token"] !== TOKEN) throw new HttpError(401, "bad token");
     await route(req, res);
   } catch (e) {
     const status = e instanceof HttpError ? e.status : 400;
@@ -474,10 +528,19 @@ const server = createServer(async (req, res) => {
   }
 });
 
+server.on("error", (e: NodeJS.ErrnoException) => {
+  console.error(e.code === "EADDRINUSE" ? `\n  Port ${PORT} is busy (another bridge running?). Stop it, or use ARENA_PORT=<port>.\n` : e);
+  process.exit(1);
+});
+
 server.listen(PORT, HOST, () => {
-  const web = process.env.ARENA_WEB ?? "http://localhost:5173";
-  console.log(`\n  AI Model Arena bridge  →  http://${HOST}:${PORT}`);
-  console.log(`  token                  →  ${TOKEN}`);
-  console.log(`  open the game with     →  ${web}/?bridge=${TOKEN}\n`);
-  console.log(`  profiles: ${MODELS_FILE}`);
+  const host = HOST === "0.0.0.0" || HOST === "127.0.0.1" ? "localhost" : HOST;
+  const built = existsSync(join(WEB_DIST, "index.html"));
+  console.log("\n  AI Model Arena is running.\n");
+  if (built) console.log(`  Open  →  http://${host}:${PORT}/?bridge=${TOKEN}\n`);
+  else console.log("  The game isn't built (web/dist is missing): use `npm run arena`, or the Vite dev server link below.\n");
+  const dev = process.env.ARENA_WEB ?? "http://localhost:5173";
+  console.log(`  With the Vite dev server (cd web && npm run dev): ${dev}/?bridge=${TOKEN}`);
+  console.log("  On a remote machine, forward this port to your computer first (e.g. ssh -L " + PORT + ":localhost:" + PORT + " <host>).");
+  console.log(`  token: ${TOKEN}   ·   profiles: ${MODELS_FILE}\n`);
 });

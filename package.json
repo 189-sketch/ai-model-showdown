@@ -2,6 +2,7 @@
   "name": "strongest-ai-model-showdown",
   "private": true,
   "scripts": {
-    "arena": "node arena/bridge.ts"
+    "arena": "cd web && npx vite build --logLevel error && cd .. && node arena/bridge.ts",
+    "arena:bridge": "node arena/bridge.ts"
   }
 }

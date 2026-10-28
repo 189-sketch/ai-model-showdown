@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { audio } from "@/game/audio";
 import { CHARS, STAGES, charIndex } from "@/game/chars";
-import { bridge, DEFAULT_BRIDGE, type ArenaModel, type CallResult, type ModelInput, type ModelKind } from "@/game/pilot/bridge";
+import { bridge, DEFAULT_BRIDGE, servedByBridge, type ArenaModel, type CallResult, type ModelInput, type ModelKind } from "@/game/pilot/bridge";
 import { forgetAvatar, useAvatar } from "@/hooks/useAvatar";
 import { tx } from "@/lib/i18n";
 import { fileToAvatar } from "@/lib/images";
@@ -233,10 +233,13 @@ function Connect({ error, onConnect }: { error: string; onConnect: () => void })
         </p>
         <code className="bg-black/60 px-3 py-2 text-sm text-[var(--gold)]">npm run arena</code>
         <p className="text-sm leading-relaxed text-white/70">{tx("然后打开它打印出的链接，或把令牌粘贴到下面。")}</p>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-bold text-white/50">{tx("桥接地址")}</span>
-          <input className={input} value={url} placeholder={DEFAULT_BRIDGE} onChange={(e) => setUrl(e.target.value)} />
-        </label>
+        {/* served by the bridge itself: the address is this page's */}
+        {!servedByBridge && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-bold text-white/50">{tx("桥接地址")}</span>
+            <input className={input} value={url} placeholder={DEFAULT_BRIDGE} onChange={(e) => setUrl(e.target.value)} />
+          </label>
+        )}
         <label className="flex flex-col gap-1">
           <span className="text-xs font-bold text-white/50">{tx("令牌")}</span>
           <input className={input} value={token} onChange={(e) => setToken(e.target.value)} />
