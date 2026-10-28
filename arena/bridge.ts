@@ -648,6 +648,12 @@ server.listen(PORT, HOST, () => {
   const host = HOST === "0.0.0.0" || HOST === "127.0.0.1" ? "localhost" : HOST;
   const built = existsSync(join(WEB_DIST, "index.html"));
   console.log("\n  AI Model Arena is running.\n");
+  // ARENA_WEB set (npm run dev): the page comes from that dev server, which proxies this bridge
+  if (process.env.ARENA_WEB) {
+    console.log(`  Open  →  ${process.env.ARENA_WEB}/?bridge=${TOKEN}\n`);
+    console.log(`  token: ${TOKEN}   ·   profiles: ${MODELS_FILE}\n`);
+    return;
+  }
   if (built) console.log(`  Open  →  http://${host}:${PORT}/?bridge=${TOKEN}\n`);
   else console.log("  The game isn't built (web/dist is missing): use `npm run arena`, or the Vite dev server link below.\n");
   const dev = process.env.ARENA_WEB ?? "http://localhost:5173";

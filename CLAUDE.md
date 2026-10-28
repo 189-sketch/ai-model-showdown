@@ -23,6 +23,7 @@ cd ../web && npm install
 ## Commands
 
 ```bash
+npm run dev             # local: API (server/local, :8787) + web (Vite, :5173) + arena bridge (:7790) in one go (tools/dev.mjs)
 edgespark deploy        # build + deploy to platform (run from project root)
 ```
 

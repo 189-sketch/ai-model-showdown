@@ -53,6 +53,9 @@ const URL_KEY = "pk-arena-url";
 const TOKEN_KEY = "pk-arena-token";
 export const DEFAULT_BRIDGE = "http://127.0.0.1:7790";
 
+/** Under the Vite dev server the bridge is proxied at /arena-bridge (web/vite.config.ts). */
+const devBridge = import.meta.env?.DEV && typeof location !== "undefined" ? `${location.origin}/arena-bridge` : "";
+
 /** True when the bridge itself served this page (`npm run arena`): it is then this very origin. */
 export const servedByBridge = typeof window !== "undefined" && (window as { __ARENA_BRIDGE__?: boolean }).__ARENA_BRIDGE__ === true;
 
@@ -93,7 +96,7 @@ export const openedFromBridgeLink = takeTokenFromUrl();
 
 export const bridge = {
   get url() {
-    return servedByBridge ? location.origin : read(URL_KEY) || DEFAULT_BRIDGE;
+    return servedByBridge ? location.origin : read(URL_KEY) || devBridge || DEFAULT_BRIDGE;
   },
   get token() {
     return read(TOKEN_KEY);

@@ -145,7 +145,7 @@ Rounds last 60 seconds and the first to win 2 rounds takes the match. There are 
 
 In Model Arena, each fighter is played by a real model. You add models, pick a look for each, then choose any two for a 1v1. The models make every move, attack and block decision themselves.
 
-1. Install dependencies (`cd web && npm install`), then run `npm run arena` from the repo root (Node 22.18+). It builds the game and starts the local bridge, which serves the game and the bridge on one port.
+1. While developing, the simplest way is `npm run dev` from the repo root (see "Run it locally"); then open the **Model Arena** link it prints. To only play the arena: install dependencies (`cd web && npm install`), then run `npm run arena` from the repo root (Node 22.18+). It builds the game and starts the local bridge, which serves the game and the bridge on one port.
 2. Open the link it prints (`http://localhost:7790/?bridge=<token>`). It opens straight into **Model Arena**. If the project lives on a remote machine, forward the port first: `ssh -L 7790:localhost:7790 <host>`. While developing with the Vite dev server, use `npm run arena:bridge` plus `cd web && npm run dev` instead, and open the 5173 link it prints.
 3. Add models in one of three ways:
    - **OpenAI-compatible API**: base URL, model ID and API key (works with OpenAI, DeepSeek, xAI, OpenRouter, Gemini, Ollama, …)
@@ -257,6 +257,20 @@ flowchart LR
 Want to try online versus on your machine first? The backend runs as a plain Node process, completely off-platform — no EdgeSpark signup, no CLI, no project.
 
 Needs Node.js 22.18 or newer (it uses the built-in `node:sqlite`).
+
+**Everything with one command.** From the repo root, run:
+
+```bash
+npm run dev
+```
+
+It starts the backend API (8787), the web dev server (5173) and the Model Arena bridge (7790) together, installing any missing dependencies first. Every output line is labelled `[api]`, `[web]` or `[arena]`. Once all three are up, it prints the game link and a link straight into Model Arena.
+
+The API and the bridge are proxied through the web server, so the browser only needs port 5173. On a remote machine, forward just that port (`ssh -L 5173:localhost:5173 <host>`).
+
+Ctrl+C stops all three. If any of them exits, the others stop too, and you're told which one failed.
+
+To start the parts separately instead, follow the steps below.
 
 **1. Install dependencies and start the backend**
 
