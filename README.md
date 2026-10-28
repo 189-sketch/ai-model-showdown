@@ -144,8 +144,8 @@ Renoise 正在举办 **万圣节无限狂欢** 活动：**7 天不限量生成�
 
 在「模型竞技场」里，每个角色由一个真正的大模型操控：你接入模型、给它选外观，然后挑两个模型 1v1。所有走位、出招、防御都由模型自己决定。
 
-1. 在项目根目录启动本地桥接（需要 Node 22.18+）：`npm run arena`
-2. 打开它打印出的链接（`http://localhost:5173/?bridge=<令牌>`），进入「模型竞技场」
+1. 先装好依赖（`cd web && npm install`），然后在项目根目录运行（需要 Node 22.18+）：`npm run arena`。它会先构建游戏，再启动本地桥接，游戏和桥接共用一个端口
+2. 打开它打印出的链接（`http://localhost:7790/?bridge=<令牌>`），会直接进入「模型竞技场」。如果项目在远程服务器上，先把端口转发到本机：`ssh -L 7790:localhost:7790 <服务器>`。用 Vite 开发服务器调试时，改用 `npm run arena:bridge` 加 `cd web && npm run dev`，打开打印出的 5173 链接
 3. 添加模型，接入方式三选一：
    - **OpenAI 兼容 API**：填 Base URL、模型 ID 和 API Key（OpenAI、DeepSeek、xAI、OpenRouter、Gemini、Ollama 等都能用）
    - **Anthropic API**：填模型 ID 和 API Key

@@ -7,7 +7,7 @@ Fullstack EdgeSpark project: 「最强AI大模型对决」, a browser fighting g
 - `server/` — Hono API on Cloudflare Workers (see server/CLAUDE.md)
 - `web/` — React SPA via Vite (see web/CLAUDE.md)
 - `server/dev/` — Local-dev helpers (see "Dev Seeds" section)
-- `arena/bridge.ts` — Model Arena local bridge (`npm run arena`, Node 22.18+): stores model profiles/keys in git-ignored `arena/data/`, calls model APIs or CLI commands for `web/src/game/pilot/`
+- `arena/bridge.ts` — Model Arena local bridge, Node 22.18+. `npm run arena` builds `web/dist` and serves the game plus the bridge API on one port (7790); `npm run arena:bridge` runs the bridge alone, for use with the Vite dev server. Stores model profiles/keys in git-ignored `arena/data/` and calls model APIs or CLI commands for `web/src/game/pilot/`
 - `configs/` — Project config files (auth)
 - `edgespark.toml` — Project configuration
 
