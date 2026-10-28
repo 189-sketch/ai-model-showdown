@@ -20,6 +20,7 @@ export interface ArenaStart {
   models: [ArenaModel, ArenaModel];
   stage: number;
   equal: boolean; // same max HP and normal-attack damage for both fighters
+  realtime: boolean; // the clock keeps running while models think (false: turn-based)
 }
 
 /** A model's uploaded avatar, or its fighter's face, ringed in its accent colour. */
@@ -63,6 +64,7 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
   const [slots, setSlots] = useState<[string | null, string | null]>([initial?.models[0].id ?? null, initial?.models[1].id ?? null]);
   const [stage, setStage] = useState(initial?.stage ?? 2);
   const [equal, setEqual] = useState(initial?.equal ?? true);
+  const [realtime, setRealtime] = useState(initial?.realtime ?? true);
   const [editing, setEditing] = useState<ArenaModel | "new" | null>(null);
   const [tests, setTests] = useState<Record<string, CallResult | "running">>({});
 
@@ -100,7 +102,7 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
   const test = async (m: ArenaModel) => {
     setTests((t) => ({ ...t, [m.id]: "running" }));
     try {
-      const r = await bridge.test(m.id, samplePrompt(Math.max(0, charIndex(m.body))));
+      const r = await bridge.test(m.id, samplePrompt(Math.max(0, charIndex(m.body)), true));
       setTests((t) => ({ ...t, [m.id]: r }));
     } catch (e) {
       setTests((t) => ({ ...t, [m.id]: { ok: false, ms: 0, error: (e as Error).message } }));
@@ -196,10 +198,29 @@ export function Arena({ initial, onStart, onBack }: { initial?: ArenaStart; onSt
                 <span className="text-xs font-normal leading-relaxed text-white/55">{tx("双方血量和普通技伤害相同，只有必杀技不同，更公平")}</span>
               </span>
             </label>
-            <p className="font-ui text-xs leading-relaxed text-white/55">
-              {tx("模型思考时游戏会暂停，所以比的是决策，不是网速。每个决策覆盖约 0.3–2 秒的行动；被打中会立刻重新决策。")}
-            </p>
-            <ArcadeButton tone="red" disabled={!picked[0] || !picked[1]} onClick={() => picked[0] && picked[1] && onStart({ models: [picked[0], picked[1]], stage, equal })}>
+            <div className="font-ui flex flex-col gap-1.5">
+              <span className="text-xs font-bold text-white/50">{tx("对战方式")}</span>
+              <div className="flex gap-1.5">
+                {[
+                  { v: true, label: "实时对战" },
+                  { v: false, label: "回合制" },
+                ].map((o) => (
+                  <button
+                    key={o.label}
+                    onClick={() => setRealtime(o.v)}
+                    className={`flex-1 -skew-x-12 px-2 py-1.5 text-sm font-bold transition ${realtime === o.v ? "bg-[var(--gold)] text-[var(--ink)]" : "bg-white/10 hover:bg-white/20"}`}
+                  >
+                    {tx(o.label)}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs leading-relaxed text-white/55">
+                {realtime
+                  ? tx("时间不会停：谁先想好谁先动，想得慢的一方会站着挨打。模型会提前思考下一步，思考期间预设的反应照样生效。")
+                  : tx("模型思考时游戏暂停，只比决策质量，不比速度。")}
+              </p>
+            </div>
+            <ArcadeButton tone="red" disabled={!picked[0] || !picked[1]} onClick={() => picked[0] && picked[1] && onStart({ models: [picked[0], picked[1]], stage, equal, realtime })}>
               {tx("开打！")}
             </ArcadeButton>
           </section>
@@ -338,7 +359,7 @@ function TestResult({ r }: { r: CallResult }) {
     return (
       <div className="break-words text-xs text-[#3ddc84]">
         ✓ {tx("{0} 给出了有效计划", secs)}: {plan.steps.map(describe).join(" · ") || tx("（只有反应）")}
-        {r.ms > 30000 && <span className="text-[var(--gold)]"> · {tx("偏慢：一局大约要 60–100 次决策")}</span>}
+        {r.ms > 8000 && <span className="text-[var(--gold)]"> · {tx("偏慢：实时对战里，它思考时只能站着（靠预设反应防守）")}</span>}
       </div>
     );
   }

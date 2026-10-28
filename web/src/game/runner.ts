@@ -110,9 +110,9 @@ export class GameRunner {
     return this.session?.stats ?? null;
   }
 
-  /** The world is frozen while a model is thinking. */
+  /** Turn-based arena: the world is frozen while a model is thinking (real-time pilots never freeze it). */
   get thinking() {
-    return !!this.o.pilots?.some((p) => p.pending);
+    return !!this.o.pilots?.some((p) => p.pending && !p.realtime);
   }
 
   private tick() {
