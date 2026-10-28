@@ -7,6 +7,7 @@ import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { loadArt } from "@/game/assets";
 import { audio } from "@/game/audio";
 import { CHARS, STAGES, charIndex } from "@/game/chars";
+import { openedFromBridgeLink } from "@/game/pilot/bridge";
 import type { PeerLink } from "@/game/rtc";
 import type { Mode } from "@/game/runner";
 import { getLang, onLangChange, tx } from "@/lib/i18n";
@@ -24,7 +25,7 @@ type ScreenId = "title" | "menu" | "online" | "select" | "game" | "help" | "aren
 const hasInvite = () => new URLSearchParams(location.search).has("room");
 
 function App() {
-  const [screen, setScreen] = useState<ScreenId>("title");
+  const [screen, setScreen] = useState<ScreenId>(openedFromBridgeLink ? "arena" : "title");
   const [mode, setMode] = useState<Mode>("cpu");
   const [name, setName] = useState(loadName);
   const [link, setLink] = useState<PeerLink | null>(null);

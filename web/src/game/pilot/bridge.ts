@@ -53,15 +53,21 @@ const URL_KEY = "pk-arena-url";
 const TOKEN_KEY = "pk-arena-token";
 export const DEFAULT_BRIDGE = "http://127.0.0.1:7790";
 
+/** True when the bridge itself served this page (`npm run arena`): it is then this very origin. */
+export const servedByBridge = typeof window !== "undefined" && (window as { __ARENA_BRIDGE__?: boolean }).__ARENA_BRIDGE__ === true;
+
+const memory = new Map<string, string>(); // when localStorage is unavailable (private windows)
+
 function read(key: string) {
   try {
-    return localStorage.getItem(key) ?? "";
+    return localStorage.getItem(key) ?? memory.get(key) ?? "";
   } catch {
-    return "";
+    return memory.get(key) ?? "";
   }
 }
 
 function write(key: string, v: string) {
+  memory.set(key, v);
   try {
     localStorage.setItem(key, v);
   } catch {
@@ -70,21 +76,24 @@ function write(key: string, v: string) {
 }
 
 /** `?bridge=<token>` (printed by the bridge at startup) is saved and stripped from the address bar. */
-function takeTokenFromUrl() {
-  if (typeof location === "undefined") return;
+function takeTokenFromUrl(): boolean {
+  if (typeof location === "undefined") return false;
   const q = new URLSearchParams(location.search);
   const t = q.get("bridge");
-  if (!t) return;
+  if (!t) return false;
   write(TOKEN_KEY, t);
   q.delete("bridge");
   const rest = q.toString();
   history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : "") + location.hash);
+  return true;
 }
-takeTokenFromUrl();
+
+/** The page was opened from the bridge's link: go straight to the Model Arena. */
+export const openedFromBridgeLink = takeTokenFromUrl();
 
 export const bridge = {
   get url() {
-    return read(URL_KEY) || DEFAULT_BRIDGE;
+    return servedByBridge ? location.origin : read(URL_KEY) || DEFAULT_BRIDGE;
   },
   get token() {
     return read(TOKEN_KEY);
