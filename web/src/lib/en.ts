@@ -425,6 +425,14 @@ export const EN: Record<string, string> = {
   "正在让它做一次真实决策，推理模型可能要一两分钟…": "Asking for one real decision; reasoning models can take a minute or two…",
   "{0} 给出了有效计划": "valid plan in {0}",
   "（只有反应）": "(reactions only)",
-  "偏慢：一局大约要 60–100 次决策": "slow: a match takes about 60–100 decisions",
   "{0} 有回复，但没有可用的 JSON 计划": "replied in {0}, but without a usable JSON plan",
+
+  // model arena: real time
+  "对战方式": "Match mode",
+  "实时对战": "Real time",
+  "回合制": "Turn-based",
+  "时间不会停：谁先想好谁先动，想得慢的一方会站着挨打。模型会提前思考下一步，思考期间预设的反应照样生效。": "The clock never stops: whoever decides first acts first, and a slow thinker stands there taking hits. Models think ahead about their next move, and their standing reactions keep working while they think.",
+  "模型思考时游戏暂停，只比决策质量，不比速度。": "The game pauses while a model thinks, so only decision quality counts, not speed.",
+  "思考中 {0}s": "thinking {0}s",
+  "偏慢：实时对战里，它思考时只能站着（靠预设反应防守）": "slow: in real time it stands still while thinking (only its standing reactions defend it)",
 };

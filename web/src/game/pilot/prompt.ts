@@ -55,13 +55,19 @@ function moveTable(c: CharDef, full: boolean, equal: boolean) {
   return out.join("\n");
 }
 
-export function systemPrompt(me: CharDef, opp: CharDef, equal: boolean): string {
+const TIME_TURNS = `- The game pauses while you think, so thinking is free. But each reply only sets your next plan (about 0.3–2 s of play), plus standing reactions that the engine checks every frame for you.
+- You are asked again when your plan is used up, or when you get hit (the rest of your plan is thrown away).`;
+
+const TIME_REAL = `- This is REAL TIME: the game does NOT pause while you think. Your opponent is another AI model that acts the moment it has decided. While you think, your fighter only does what is left of your current plan, and then stands still. Your standing reactions keep working the whole time.
+- So answer quickly. Make each plan cover about as long as you take to answer (roughly 1–3 s of play), and use reactions to protect yourself while you think.
+- You are asked for your next plan shortly before your current one runs out, and right after you get hit (the rest of your plan is thrown away). By the time your answer arrives, the situation will have moved on: prefer plans that still make sense a second later.`;
+
+export function systemPrompt(me: CharDef, opp: CharDef, equal: boolean, realtime: boolean): string {
   return `You are the pilot of a fighter in a 2D fighting game, playing a real best-of-3 match against another AI model. Win each round by bringing the opponent to 0 HP, or by having more HP when the 60 s timer runs out.
 
 ## How time works
 - The game runs at 60 frames per second (1 s = 60 f). Distances are in pixels; the stage is ${STAGE_W} px wide.
-- The game pauses while you think, so thinking is free. But each reply only sets your next plan (about 0.3–2 s of play), plus standing reactions that the engine checks every frame for you.
-- You are asked again when your plan is used up, or when you get hit (the rest of your plan is thrown away).
+${realtime ? TIME_REAL : TIME_TURNS}
 
 ## Core mechanics
 - Blocking: "block high" (hold back) stops mid and overhead attacks. "block low" (crouch back) stops mid and low attacks. Jump-ins and "overhead" moves must be blocked high; "low" moves must be blocked low. Blocked special moves still deal a little chip damage.
@@ -146,6 +152,7 @@ export interface Recap {
   taken: number;
   oppMoves: string[];
   planEnd: string;
+  thinkSeconds?: number; // real time: how long the previous answer took to arrive
 }
 
 export function observation(s: GameState, me: 0 | 1, recap: Recap | null): string {
@@ -167,7 +174,8 @@ export function observation(s: GameState, me: 0 | 1, recap: Recap | null): strin
   if (shots.length) lines.push(`Projectiles: ${shots.join("; ")}.`);
   if (recap) {
     lines.push(
-      `Since your last decision (${recap.seconds.toFixed(1)} s): you dealt ${recap.dealt}, took ${recap.taken}. Opponent used: ${recap.oppMoves.join(", ") || "nothing"}. Your last plan ${recap.planEnd}.`
+      `Since your last decision (${recap.seconds.toFixed(1)} s): you dealt ${recap.dealt}, took ${recap.taken}. Opponent used: ${recap.oppMoves.join(", ") || "nothing"}. Your last plan ${recap.planEnd}.` +
+        (recap.thinkSeconds !== undefined ? ` Your previous answer took ${recap.thinkSeconds.toFixed(1)} s to arrive, and the game kept running meanwhile.` : "")
     );
   }
   lines.push("Your move: reply with the JSON object.");
@@ -175,8 +183,8 @@ export function observation(s: GameState, me: 0 | 1, recap: Recap | null): strin
 }
 
 /** The first decision of an equal-stats mirror match: what the arena's Test button sends. */
-export function samplePrompt(char: number): { system: string; prompt: string } {
+export function samplePrompt(char: number, realtime = true): { system: string; prompt: string } {
   const s = createState({ chars: [char, char], stage: 0, seed: 1, equal: true });
   while (s.phase !== "fight") step(s, 0, 0);
-  return { system: systemPrompt(CHARS[char], CHARS[char], true), prompt: observation(s, 0, null) };
+  return { system: systemPrompt(CHARS[char], CHARS[char], true, realtime), prompt: observation(s, 0, null) };
 }
