@@ -417,4 +417,14 @@ export const EN: Record<string, string> = {
   "高度 {0}": "Height {0}",
   "脚的位置 {0}%": "Feet at {0}%",
   "应用": "Apply",
+
+  // model arena: diagnostics
+  "{0} 连续 {1} 次没能给出决策": "{0} failed to decide {1} times in a row",
+  "继续尝试": "Keep trying",
+  "测试决策": "Test a decision",
+  "正在让它做一次真实决策，推理模型可能要一两分钟…": "Asking for one real decision; reasoning models can take a minute or two…",
+  "{0} 给出了有效计划": "valid plan in {0}",
+  "（只有反应）": "(reactions only)",
+  "偏慢：一局大约要 60–100 次决策": "slow: a match takes about 60–100 decisions",
+  "{0} 有回复，但没有可用的 JSON 计划": "replied in {0}, but without a usable JSON plan",
 };

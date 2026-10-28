@@ -26,6 +26,8 @@ interface Props {
   onExit: () => void;
 }
 
+const STALL_AFTER = 3; // failed decisions in a row before the arena stops to ask
+
 const DUMMY: { v: DummyMode; label: string }[] = [
   { v: "stand", label: "站立" },
   { v: "crouch", label: "下蹲" },
@@ -47,6 +49,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
   const [touch] = useState(() => isTouch() && mode !== "arena");
   const [pilots, setPilots] = useState<[Pilot, Pilot] | null>(null);
   const [skins, setSkins] = useState<[FighterSkin, FighterSkin] | null>(null);
+  const [stalled, setStalled] = useState<Pilot | null>(null); // a model failing decision after decision
   const isHost = link?.role !== "guest";
   const localSide: 0 | 1 = mode === "online" && !isHost ? 1 : 0;
 
@@ -55,6 +58,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
     startInput();
     setEnded(null);
     setVictory(null);
+    setStalled(null);
     setWantRematch(false);
     setPeerWantsRematch(false);
     const ps = mode === "arena" && arena ? ([new Pilot(arena.models[0], 0), new Pilot(arena.models[1], 1)] as [Pilot, Pilot]) : undefined;
@@ -164,6 +168,19 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
     onReselect();
   };
 
+  // arena: a model that keeps failing (timeouts, bad key, no valid JSON) stops the match instead of blocking forever
+  useEffect(() => {
+    if (!pilots || ended !== null) return;
+    const t = setInterval(() => {
+      const p = pilots.find((x) => x.failStreak >= STALL_AFTER);
+      if (p && runner.current && !runner.current.paused) {
+        runner.current.paused = true;
+        setStalled(p);
+      }
+    }, 300);
+    return () => clearInterval(t);
+  }, [pilots, ended]);
+
   const gone = disconnected || !!peerGone;
   const won = ended !== null && (mode === "online" ? ended === localSide : ended === 0);
   const title =
@@ -180,6 +197,27 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
       {touch && ended === null && !paused && <TouchPad />}
 
       {pilots && ended === null && <PilotHud pilots={pilots} skins={skins} runner={runner} />}
+
+      {stalled && ended === null && (
+        <Overlay title="MODEL ERROR" sub={tx("{0} 连续 {1} 次没能给出决策", stalled.model.name, stalled.failStreak)}>
+          <div className="font-ui max-w-md break-words bg-black/50 p-3 text-xs leading-relaxed text-[var(--red)] ring-1 ring-white/10">
+            {stalled.log[stalled.log.length - 1]?.error}
+          </div>
+          <ArcadeButton
+            tone="gold"
+            onClick={() => {
+              stalled.failStreak = 0;
+              setStalled(null);
+              if (runner.current) runner.current.paused = false;
+            }}
+          >
+            {tx("继续尝试")}
+          </ArcadeButton>
+          <ArcadeButton tone="gray" onClick={onReselect}>
+            {tx("返回竞技场")}
+          </ArcadeButton>
+        </Overlay>
+      )}
 
       {mode !== "online" && ended === null && (
         <button

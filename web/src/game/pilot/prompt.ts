@@ -6,7 +6,7 @@
 
 import { CHARS, findMove, type CharDef } from "../chars";
 import { METER_STOCK, STAGE_W, WALL_PAD } from "../constants";
-import { EQUAL_HP, maxHp } from "../sim";
+import { EQUAL_HP, createState, maxHp, step } from "../sim";
 import type { Fighter, GameState, MoveDef } from "../types";
 import { CONDITIONS } from "./plan";
 
@@ -172,4 +172,11 @@ export function observation(s: GameState, me: 0 | 1, recap: Recap | null): strin
   }
   lines.push("Your move: reply with the JSON object.");
   return lines.join("\n");
+}
+
+/** The first decision of an equal-stats mirror match: what the arena's Test button sends. */
+export function samplePrompt(char: number): { system: string; prompt: string } {
+  const s = createState({ chars: [char, char], stage: 0, seed: 1, equal: true });
+  while (s.phase !== "fight") step(s, 0, 0);
+  return { system: systemPrompt(CHARS[char], CHARS[char], true), prompt: observation(s, 0, null) };
 }
