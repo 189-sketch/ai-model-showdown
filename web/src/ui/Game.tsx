@@ -61,7 +61,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
     setStalled(null);
     setWantRematch(false);
     setPeerWantsRematch(false);
-    const ps = mode === "arena" && arena ? ([new Pilot(arena.models[0], 0), new Pilot(arena.models[1], 1)] as [Pilot, Pilot]) : undefined;
+    const ps = mode === "arena" && arena ? ([new Pilot(arena.models[0], 0, arena.realtime), new Pilot(arena.models[1], 1, arena.realtime)] as [Pilot, Pilot]) : undefined;
     setPilots(ps ?? null);
     const r = new GameRunner({
       canvas: canvas.current,
@@ -84,6 +84,7 @@ export function Game({ mode, info, names, link, arena, matchKey, peerGone, onRem
               bodies: [CHARS[info.chars[0]].id, CHARS[info.chars[1]].id],
               winner: w,
               equal: !!arena?.equal,
+              realtime: !!arena?.realtime,
               stage: info.stage,
               seed: info.seed,
               stats: [ps[0].stats, ps[1].stats],
@@ -321,7 +322,8 @@ function PilotHud({ pilots, skins, runner }: { pilots: [Pilot, Pilot]; skins: [F
     const t = setInterval(() => setTick((n) => n + 1), 150);
     return () => clearInterval(t);
   }, []);
-  const thinking = pilots.filter((p) => p.pending);
+  // turn-based only: real-time matches never stop for a thinking model
+  const thinking = pilots.filter((p) => p.pending && !p.realtime);
   return (
     <>
       {thinking.length > 0 && !runner.current?.paused && (
@@ -342,6 +344,9 @@ function PilotHud({ pilots, skins, runner }: { pilots: [Pilot, Pilot]; skins: [F
               {p.pending && <i className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--gold)]" />}
               {skins?.[p.side].avatar && <img src={skins[p.side].avatar!.src} alt="" className="h-4 w-4 rounded-full object-cover" />}
               {p.model.name}
+              {p.pending && p.realtime && (
+                <span className="font-num text-[var(--gold)]">{tx("思考中 {0}s", ((performance.now() - p.thinkingSince) / 1000).toFixed(1))}</span>
+              )}
               <span className="font-normal text-white/50">{tx("决策 {0} · 平均 {1}s · 失误 {2}", st.decisions, (st.avgMs / 1000).toFixed(1), st.errors)}</span>
             </div>
             {last?.say && <div className="font-bold text-[var(--gold)]">「{last.say}」</div>}

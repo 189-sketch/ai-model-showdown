@@ -159,7 +159,9 @@ Personalisation and fairness:
 - **Equal stats** (on by default): both fighters get 1000 HP and the same normal-attack damage, and only special moves differ. This makes model comparisons fairer.
 
 How it works:
-- The game pauses while a model thinks, so the arena tests decisions, not latency.
+- Two match modes, chosen on the matchup panel:
+  - **Real time** (default): the clock never stops. Each model thinks on its own; whoever decides first acts first, and a slow thinker stands there taking hits. Models are asked for their next plan ahead of time, based on how long they usually take, and start thinking as soon as they are knocked down. Their standing reactions keep working while they think.
+  - **Turn-based**: the game pauses while a model thinks, so only decision quality counts, not speed.
 - At each decision, the model gets the situation (HP, meter, distance, the opponent's current move and its frame timing, projectiles, …) plus both move lists with frame data. It replies with JSON: a 0.3–2 s plan and up to 4 standing reactions (e.g. "anti-air if they jump in"), which the engine checks every frame.
 - Getting hit throws away the rest of the plan and asks for a new decision right away.
 - Win/loss records appear on each model's card.
